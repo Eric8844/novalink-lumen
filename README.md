@@ -138,7 +138,7 @@ scripts                        构建辅助脚本
 - Modrinth API：模组、资源包、光影与整合包目录
 - Mojang / Microsoft：版本清单、资源下载与正版登录
 - NovaLink 官方服务：账户、论坛、动态与审核
-- 首页 AI 标语为可选功能。开源版本不内置任何第三方 API Key；如需启用，请自行设置环境变量 `NOVALINK_SPARK_KEY`。
+- 首页 AI 标语由 NovaLink 官方服务端代理生成，客户端源码不包含任何第三方 API Key；自建服务时请在服务端配置 AI，客户端不直连模型。
 
 本仓库只包含桌面启动器源码，不包含 NovaLink 服务端、管理后台、用户数据或部署凭据。
 

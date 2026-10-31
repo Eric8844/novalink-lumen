@@ -1,7 +1,6 @@
 using NovaLink.Lumen.Core;
 using NovaLink.Lumen.Services.Http;
 using System.Net;
-using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -9,12 +8,16 @@ using System.Text.RegularExpressions;
 namespace NovaLink.Lumen.Services.Home;
 
 /// <summary>
-/// 为首页启动卡片生成短标语。旧版 JS 使用讯飞星火 Lite，这里沿用同一模型，
+/// 为首页启动卡片生成短标语。AI 生成由 NovaLink 服务端代理，客户端不内置任何第三方密钥；
 /// 并按版本缓存，避免每次进入首页都请求模型。
 /// </summary>
 public sealed class HeroTaglineService
 {
-    private const string Endpoint = "https://spark-api-open.xf-yun.com/v1/chat/completions";
+    private static readonly string[] Endpoints =
+    {
+        "http://121.41.174.153:3210",
+        "https://novalink.de5.net"
+    };
     private const string CacheFile = "hero-taglines-v1.json";
     private const string OfficialUrl = "https://launchercontent.mojang.com/v2/javaPatchNotes.json";
 
@@ -36,10 +39,6 @@ public sealed class HeroTaglineService
         _paths = paths;
         _http = http;
     }
-
-    // 开源版本不内置任何第三方密钥；需要使用星火标语时，自行设置 NOVALINK_SPARK_KEY。
-    private static string SparkKey
-        => Environment.GetEnvironmentVariable("NOVALINK_SPARK_KEY") ?? "";
 
     private string CachePath => Path.Combine(_paths.Cache, CacheFile);
 
@@ -135,50 +134,32 @@ public sealed class HeroTaglineService
 
     private async Task<IReadOnlyList<string>> GenerateAsync(string version, string official, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(SparkKey)) return Array.Empty<string>();
-
-        var system = "你是 NovaLink Lumen（Minecraft Java 启动器）的中文文案编辑。"
-                   + "根据版本简介写三行中文短标语，每行 14-26 个汉字，必须是完整的一句话，不要用四字词语拼贴。"
-                   + "语气安静、有光感，像一次旅程的开场；不要编号、引号、emoji、英文、标题、解释，不要复述原文。"
-                   + "示例（不要照抄）：\n风从林间穿过，世界正等你启程。\n把夜色收进口袋，下一次旅程会更亮。\n光落在方块上，冒险从这一刻开始。"
-                   + "严格输出三行，每行一句，用换行分隔。";
-        var user = "版本：" + version + "。"
-                 + (string.IsNullOrWhiteSpace(official) ? "没有官方简介，请写这个版本给人的启程感。" : "官方简介：" + official)
-                 + " 不要出现版本号、英文或“官方文案”等字样。";
-
-        var payload = new
+        var payload = new { version, official };
+        foreach (var baseUrl in Endpoints)
         {
-            model = "lite",
-            temperature = 0.85,
-            max_tokens = 260,
-            messages = new object[]
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(TimeSpan.FromSeconds(35));
+            try
             {
-                new { role = "system", content = system },
-                new { role = "user", content = user }
+                var result = await _http.PostJsonAsync<TaglineResponse>(
+                    baseUrl + "/api/lumen/tagline", payload, timeout.Token).ConfigureAwait(false);
+                if (result is { Ok: true, Lines.Count: > 0 })
+                {
+                    var lines = CleanLines(string.Join("\n", result.Lines));
+                    if (lines.Count > 0) return lines;
+                }
+                AppLog.Error("hero", "标语服务返回空结果：" + baseUrl + " / " + (result?.Msg ?? ""));
             }
-        };
-
-        using var request = new HttpRequestMessage(HttpMethod.Post, Endpoint);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", SparkKey);
-        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        request.Content = new StringContent(JsonSerializer.Serialize(payload, JsonDefaults.Options), Encoding.UTF8, "application/json");
-
-        using var res = await _http.Client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
-        var body = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-        if (!res.IsSuccessStatusCode)
-        {
-            AppLog.Error("hero", "星火 Lite 返回 HTTP " + (int)res.StatusCode + "：" + body[..Math.Min(240, body.Length)]);
-            return Array.Empty<string>();
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                AppLog.Error("hero", "标语服务超时：" + baseUrl);
+            }
+            catch (Exception ex)
+            {
+                AppLog.Error("hero", "标语服务不可用：" + baseUrl, ex);
+            }
         }
-
-        using var doc = JsonDocument.Parse(body);
-        if (!doc.RootElement.TryGetProperty("choices", out var choices) || choices.ValueKind != JsonValueKind.Array || choices.GetArrayLength() == 0)
-            return Array.Empty<string>();
-        var message = choices[0].TryGetProperty("message", out var m) ? m : default;
-        if (message.ValueKind != JsonValueKind.Object || !message.TryGetProperty("content", out var contentEl))
-            return Array.Empty<string>();
-
-        return CleanLines(contentEl.GetString() ?? "");
+        return Array.Empty<string>();
     }
 
     private static IReadOnlyList<string> CleanLines(string raw)
@@ -278,6 +259,13 @@ public sealed class HeroTaglineService
 
     private static string Normalize(string version)
         => (version ?? "").Trim().ToLowerInvariant();
+
+    private sealed class TaglineResponse
+    {
+        public bool Ok { get; set; }
+        public List<string> Lines { get; set; } = new();
+        public string? Msg { get; set; }
+    }
 
     private sealed class TaglineEntry
     {
