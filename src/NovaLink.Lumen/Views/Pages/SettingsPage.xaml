@@ -1,0 +1,494 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+    x:Class="NovaLink.Lumen.Views.Pages.SettingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Background="Transparent">
+
+    <Grid Margin="0,72,0,0">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Margin="4,10,4,0" Spacing="4">
+            <TextBlock Text="PREFERENCES" Style="{StaticResource TextEyebrow}" />
+            <TextBlock Text="设置" Style="{StaticResource TextPageTitle}" />
+            <TextBlock Text="账户、游戏运行时、内存与关于。" Style="{StaticResource TextBody}" />
+        </StackPanel>
+
+        <Grid Grid.Row="1" Margin="0,22,0,0" ColumnSpacing="16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="210" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <Border Style="{StaticResource GlassCard}" Padding="12" VerticalAlignment="Top">
+                <StackPanel Spacing="6">
+                    <TextBlock Text="偏好设置" Style="{StaticResource TextSmall}" Margin="10,6,0,10" />
+                    <Button x:Name="CategoryAccounts" Tag="accounts" Click="Category_Click"
+                            Style="{StaticResource GhostButton}" HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Left" Padding="14,0" Height="46">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <FontIcon Glyph="&#xE77B;" FontSize="16" />
+                            <TextBlock Text="账户" FontSize="13.5" />
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="CategoryGame" Tag="game" Click="Category_Click"
+                            Style="{StaticResource GhostButton}" HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Left" Padding="14,0" Height="46">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <FontIcon Glyph="&#xE7FC;" FontSize="16" />
+                            <TextBlock Text="游戏与 Java" FontSize="13.5" />
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="CategoryAppearance" Tag="appearance" Click="Category_Click"
+                            Style="{StaticResource GhostButton}" HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Left" Padding="14,0" Height="46">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <FontIcon Glyph="&#xE790;" FontSize="16" />
+                            <TextBlock Text="外观与性能" FontSize="13.5" />
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="CategoryAbout" Tag="about" Click="Category_Click"
+                            Style="{StaticResource GhostButton}" HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Left" Padding="14,0" Height="46">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <FontIcon Glyph="&#xE946;" FontSize="16" />
+                            <TextBlock Text="关于" FontSize="13.5" />
+                        </StackPanel>
+                    </Button>
+                    <Border Height="1" Background="{StaticResource BrushBorderSubtle}" Margin="8,8" />
+                    <TextBlock x:Name="StorageText" Style="{StaticResource TextSmall}" Margin="10,0,10,4" TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+
+            <ScrollViewer x:Name="SettingsScroll" Grid.Column="1" VerticalScrollBarVisibility="Auto" Padding="0,0,6,20" IsScrollInertiaEnabled="False" ViewChanging="SettingsScroll_ViewChanging" ViewChanged="SettingsScroll_ViewChanged">
+                <Grid x:Name="SettingsPanelHost">
+                    <StackPanel x:Name="AccountsPanel" Spacing="16">
+                        <Border Style="{StaticResource GlassCard}">
+                            <StackPanel Spacing="14">
+                                <Grid>
+                                    <StackPanel>
+                                        <TextBlock Text="账户" Style="{StaticResource TextSectionTitle}" />
+                                        <TextBlock x:Name="AccountCountText" Style="{StaticResource TextSmall}" Margin="0,4,0,0" />
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                                        <Button x:Name="AddOfflineButton" AutomationProperties.AutomationId="AddOfflineButton"
+                                                Style="{StaticResource GhostButton}" Height="38" Padding="14,0" Click="AddOffline_Click">
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <FontIcon Glyph="&#xE710;" FontSize="12" />
+                                                <TextBlock Text="离线" FontSize="12.5" />
+                                            </StackPanel>
+                                        </Button>
+                                        <Button x:Name="AddMicrosoftButton" AutomationProperties.AutomationId="AddMicrosoftButton"
+                                                Style="{StaticResource GhostButton}" Height="38" Padding="14,0" Click="AddMicrosoft_Click">
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <FontIcon Glyph="&#xE8D7;" FontSize="12" />
+                                                <TextBlock Text="Microsoft" FontSize="12.5" />
+                                            </StackPanel>
+                                        </Button>
+                                        <Button x:Name="AddNovalinkButton" AutomationProperties.AutomationId="AddNovalinkButton"
+                                                Style="{StaticResource AccentButton}" Height="38" Padding="14,0" Click="AddNovalink_Click">
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <FontIcon Glyph="&#xE8D7;" FontSize="12" />
+                                                <TextBlock Text="NovaLink" FontSize="12.5" />
+                                            </StackPanel>
+                                        </Button>
+                                    </StackPanel>
+                                </Grid>
+                                <TextBlock Text="NovaLink 账户绑定 Microsoft 后，将使用 Microsoft 的名称、皮肤与档案启动。离线账户始终可用。"
+                                           Style="{StaticResource TextSmall}" />
+                                <StackPanel x:Name="AccountList" Spacing="8" />
+                                <Border x:Name="EmptyAccounts" Visibility="Collapsed" Padding="18" CornerRadius="16"
+                                        Background="{StaticResource BrushFillSubtle}" BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1">
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="还没有账户" FontSize="13.5" />
+                                        <TextBlock Text="添加离线账户即可直接开始游戏。" Style="{StaticResource TextSmall}" />
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
+                    <StackPanel x:Name="GamePanel" Spacing="16" Visibility="Collapsed">
+                        <Border Style="{StaticResource GlassCard}">
+                            <StackPanel Spacing="12">
+                                <TextBlock Text="游戏目录" Style="{StaticResource TextSectionTitle}" />
+                                <TextBlock Text="版本、模组、存档与资源都会保存在这里。" Style="{StaticResource TextSmall}" />
+                                <Border Background="{StaticResource BrushFillSubtle}" BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1" CornerRadius="14" Padding="14,12">
+                                    <Grid ColumnSpacing="12">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock x:Name="RootText" FontFamily="Cascadia Mono" FontSize="12.5"
+                                                   Foreground="{StaticResource BrushTextSecondary}" TextTrimming="CharacterEllipsis" />
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                                            <Button x:Name="ChangeRootButton" AutomationProperties.AutomationId="ChangeGameRootButton"
+                                                    Content="切换目录" Style="{StaticResource GhostButton}" Height="34" Padding="12,0" Click="ChangeRoot_Click" />
+                                            <Button x:Name="OpenRootButton" Content="打开" Style="{StaticResource GhostButton}"
+                                                    Height="34" Padding="12,0" Click="OpenRoot_Click" />
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource GlassCard}">
+                            <Grid ColumnSpacing="16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Spacing="5">
+                                    <TextBlock Text="版本隔离" Style="{StaticResource TextSectionTitle}" />
+                                    <TextBlock Text="新安装的版本默认使用独立游戏目录，模组、存档与资源包互不影响。"
+                                               Style="{StaticResource TextSmall}" TextWrapping="Wrap" />
+                                </StackPanel>
+                                <ToggleSwitch x:Name="DefaultIsolationSwitch" Grid.Column="1" VerticalAlignment="Center"
+                                              OnContent="开" OffContent="关"
+                                              AutomationProperties.AutomationId="DefaultIsolationSwitch"
+                                              Toggled="DefaultIsolation_Toggled" />
+                            </Grid>
+                        </Border>
+
+                        <Border Style="{StaticResource GlassCard}">
+                            <StackPanel Spacing="12">
+                                <Grid>
+                                    <TextBlock Text="Java 运行时" Style="{StaticResource TextSectionTitle}" />
+                                    <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                                        <Button x:Name="InstallJavaButton" AutomationProperties.AutomationId="InstallJavaButton"
+                                                Content="自动安装 Java 21" Style="{StaticResource GhostButton}"
+                                                Height="34" Padding="12,0" Click="InstallJava_Click" />
+                                        <Button x:Name="DetectJavaButton" AutomationProperties.AutomationId="DetectJavaButton"
+                                                Content="重新检测" Style="{StaticResource GhostButton}"
+                                                Height="34" Padding="12,0" Click="DetectJava_Click" />
+                                    </StackPanel>
+                                </Grid>
+                                <TextBlock x:Name="JavaHint" Style="{StaticResource TextSmall}" />
+                                <StackPanel x:Name="JavaList" Spacing="8" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource GlassCard}">
+                            <StackPanel Spacing="12">
+                                <TextBlock Text="下载" Style="{StaticResource TextSectionTitle}" />
+                                <TextBlock Text="大文件会按线程分片并行下载，再校验合并。线程越多占用带宽越高，网络不稳定时建议降低。"
+                                           Style="{StaticResource TextSmall}" />
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Spacing="6">
+                                        <TextBlock Text="下载线程" Style="{StaticResource TextSmall}" />
+                                        <ComboBox x:Name="DownloadThreadsCombo" Width="220" Height="36" HorizontalAlignment="Left"
+                                                  Foreground="{StaticResource BrushText}" Background="{StaticResource BrushField}"
+                                                  BorderBrush="{StaticResource BrushFieldBorder}"
+                                                  AutomationProperties.AutomationId="DownloadThreadsCombo"
+                                                  SelectionChanged="DownloadThreads_Changed">
+                                            <ComboBoxItem Content="2 线程 · 稳定" Tag="2" />
+                                            <ComboBoxItem Content="4 线程 · 均衡" Tag="4" />
+                                            <ComboBoxItem Content="6 线程 · 推荐" Tag="6" />
+                                            <ComboBoxItem Content="8 线程 · 极速" Tag="8" />
+                                        </ComboBox>
+                                    </StackPanel>
+                                    <TextBlock x:Name="DownloadThreadsHint" Grid.Column="1" Text="并行分片 · 失败自动回退单线程"
+                                               Style="{StaticResource TextSmall}" VerticalAlignment="Bottom" Margin="0,0,0,8" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource GlassCard}">
+                            <StackPanel Spacing="14">
+                                <TextBlock Text="内存与 JVM" Style="{StaticResource TextSectionTitle}" />
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Spacing="8">
+                                        <TextBlock Text="最大内存" Style="{StaticResource TextSmall}" />
+                                        <Slider x:Name="MemorySlider" Minimum="1024" Maximum="32768" StepFrequency="512"
+                                                AutomationProperties.AutomationId="MemorySlider" ValueChanged="MemorySlider_ValueChanged" />
+                                    </StackPanel>
+                                    <TextBlock x:Name="MemoryValue" Grid.Column="1" VerticalAlignment="Bottom" Margin="0,0,0,6"
+                                               FontSize="18" FontWeight="SemiBold" />
+                                </Grid>
+                                <TextBlock Text="额外 JVM 参数（可选）" Style="{StaticResource TextSmall}" />
+                                <TextBox x:Name="JavaArgsBox" Style="{StaticResource FieldBox}" PlaceholderText="-XX:+UseG1GC ..." />
+                                <Button x:Name="SaveRuntimeButton" Content="保存运行时设置" Style="{StaticResource AccentButton}"
+                                        Width="190" Height="40" HorizontalAlignment="Left" Click="SaveRuntime_Click" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
+                    <StackPanel x:Name="AppearancePanel" Spacing="16" Visibility="Collapsed">
+                        <Border Style="{StaticResource GlassCard}">
+                            <StackPanel Spacing="14">
+                                <TextBlock Text="外观" Style="{StaticResource TextSectionTitle}" />
+                                <TextBlock Text="液态玻璃主题会同时适配深色与浅色。切换后背景地形、卡片、弹窗和论坛都会即时换色。"
+                                           Style="{StaticResource TextBody}" />
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Spacing="6">
+                                        <TextBlock Text="界面主题" Style="{StaticResource TextSmall}" />
+                                        <ComboBox x:Name="ThemeCombo" Width="220" Height="36" HorizontalAlignment="Left"
+                                                  Foreground="{StaticResource BrushText}" Background="{StaticResource BrushField}"
+                                                  BorderBrush="{StaticResource BrushFieldBorder}"
+                                                  AutomationProperties.AutomationId="ThemeCombo" SelectionChanged="Theme_Changed">
+                                            <ComboBoxItem Content="深色 · 液态玻璃" Tag="dark" />
+                                            <ComboBoxItem Content="浅色 · 日光玻璃" Tag="light" />
+                                        </ComboBox>
+                                    </StackPanel>
+                                    <Border Grid.Column="1" Style="{StaticResource Pill}" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="0,0,0,4">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <Ellipse x:Name="ThemeDot" Width="8" Height="8" Fill="{StaticResource BrushMint}" />
+                                            <TextBlock x:Name="ThemeStatusText" Text="深色 · 液态玻璃" FontSize="12" />
+                                        </StackPanel>
+                                    </Border>
+                                </Grid>
+
+                                <StackPanel Spacing="8" Margin="0,4,0,0">
+                                    <TextBlock Text="主题色" Style="{StaticResource TextSmall}" />
+                                    <Grid ColumnSpacing="12">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <Button Width="34" Height="34" Padding="0" CornerRadius="10" BorderThickness="1"
+                                                    x:Name="AccentMintButton" AutomationProperties.AutomationId="AccentMintButton"
+                                                    Background="#FF7CEBD6" BorderBrush="#66FFFFFF" Tag="#7CEBD6"
+                                                    ToolTipService.ToolTip="薄荷" Click="AccentPreset_Click" />
+                                            <Button Width="34" Height="34" Padding="0" CornerRadius="10" BorderThickness="1"
+                                                    x:Name="AccentSkyButton" AutomationProperties.AutomationId="AccentSkyButton"
+                                                    Background="#FF61C8FF" BorderBrush="#66FFFFFF" Tag="#61C8FF"
+                                                    ToolTipService.ToolTip="天青" Click="AccentPreset_Click" />
+                                            <Button Width="34" Height="34" Padding="0" CornerRadius="10" BorderThickness="1"
+                                                    x:Name="AccentVioletButton" AutomationProperties.AutomationId="AccentVioletButton"
+                                                    Background="#FFA996FF" BorderBrush="#66FFFFFF" Tag="#A996FF"
+                                                    ToolTipService.ToolTip="星紫" Click="AccentPreset_Click" />
+                                            <Button Width="34" Height="34" Padding="0" CornerRadius="10" BorderThickness="1"
+                                                    x:Name="AccentPinkButton" AutomationProperties.AutomationId="AccentPinkButton"
+                                                    Background="#FFFF8FB8" BorderBrush="#66FFFFFF" Tag="#FF8FB8"
+                                                    ToolTipService.ToolTip="霞粉" Click="AccentPreset_Click" />
+                                            <Button Width="34" Height="34" Padding="0" CornerRadius="10" BorderThickness="1"
+                                                    x:Name="AccentGoldButton" AutomationProperties.AutomationId="AccentGoldButton"
+                                                    Background="#FFFFC46B" BorderBrush="#66FFFFFF" Tag="#FFC46B"
+                                                    ToolTipService.ToolTip="暖金" Click="AccentPreset_Click" />
+                                            <Button Width="34" Height="34" Padding="0" CornerRadius="10" BorderThickness="1"
+                                                    x:Name="AccentLimeButton" AutomationProperties.AutomationId="AccentLimeButton"
+                                                    Background="#FFA8E063" BorderBrush="#66FFFFFF" Tag="#A8E063"
+                                                    ToolTipService.ToolTip="青柠" Click="AccentPreset_Click" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                                            <Button x:Name="AccentCustomButton" Content="自定义颜色" Style="{StaticResource GhostButton}"
+                                                    Height="34" Padding="12,0" AutomationProperties.AutomationId="AccentCustomButton">
+                                                <Button.Flyout>
+                                                    <Flyout Placement="BottomEdgeAlignedRight">
+                                                        <StackPanel Spacing="10" Padding="4">
+                                                            <TextBlock Text="选择任意主题色" FontSize="13" FontWeight="SemiBold" />
+                                                            <ColorPicker x:Name="AccentPicker" IsAlphaEnabled="False"
+                                                                         IsColorChannelTextInputVisible="False"
+                                                                         IsHexInputVisible="True" ColorSpectrumShape="Ring"
+                                                                         Loaded="AccentPicker_Loaded"
+                                                                         ColorChanged="AccentPicker_ColorChanged" />
+                                                        </StackPanel>
+                                                    </Flyout>
+                                                </Button.Flyout>
+                                            </Button>
+                                            <TextBlock x:Name="AccentStatusText" Text="薄荷 · #7CEBD6" Style="{StaticResource TextSmall}"
+                                                       VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Grid>
+                                    <TextBlock Text="会同时影响按钮、强调文字、选中态与高光。浅色环境下会自动压暗过亮的颜色。"
+                                               Style="{StaticResource TextSmall}" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource GlassCard}">
+                            <StackPanel Spacing="14">
+                                <TextBlock Text="液态玻璃引擎" Style="{StaticResource TextSectionTitle}" />
+                                <TextBlock Text="Win2D 折射、色散、菲涅尔边缘与镜面高光。参数实时生效，4K 下会自动降低采样并限制帧率。"
+                                           Style="{StaticResource TextBody}" />
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Spacing="6">
+                                        <TextBlock Text="画质自适应" Style="{StaticResource TextSmall}" />
+                                        <ComboBox x:Name="GlassQualityCombo" Width="220" Height="36" HorizontalAlignment="Left"
+                                                  Foreground="{StaticResource BrushText}" Background="{StaticResource BrushField}"
+                                                  BorderBrush="{StaticResource BrushFieldBorder}"
+                                                  AutomationProperties.AutomationId="GlassQualityCombo" SelectionChanged="GlassQuality_Changed">
+                                            <ComboBoxItem Content="自动（推荐）" Tag="Auto" IsSelected="True" />
+                                            <ComboBoxItem Content="高品质" Tag="High" />
+                                            <ComboBoxItem Content="均衡" Tag="Balanced" />
+                                            <ComboBoxItem Content="轻量" Tag="Light" />
+                                            <ComboBoxItem Content="省电" Tag="Saver" />
+                                            <ComboBoxItem Content="关闭玻璃" Tag="Off" />
+                                        </ComboBox>
+                                    </StackPanel>
+                                    <TextBlock x:Name="GlassQualityHint" Grid.Column="1" Text="自动 · 按窗口面积与帧率调节" Style="{StaticResource TextSmall}" VerticalAlignment="Bottom" Margin="0,0,0,8" />
+                                </Grid>
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="56" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="折射强度" Style="{StaticResource TextSmall}" />
+                                        <Slider x:Name="RefractionSlider" Minimum="0" Maximum="2.4" StepFrequency="0.1" Value="1"
+                                                Tag="RefFactor" ValueChanged="GlassSlider_Changed" />
+                                    </StackPanel>
+                                    <TextBlock x:Name="RefractionValue" Grid.Column="1" Text="1.0" Style="{StaticResource TextSmall}" VerticalAlignment="Bottom" Margin="0,0,0,8" />
+                                </Grid>
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="56" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="色散" Style="{StaticResource TextSmall}" />
+                                        <Slider x:Name="DispersionSlider" Minimum="0" Maximum="2.4" StepFrequency="0.1" Value="1"
+                                                Tag="RefDispersion" ValueChanged="GlassSlider_Changed" />
+                                    </StackPanel>
+                                    <TextBlock x:Name="DispersionValue" Grid.Column="1" Text="1.0" Style="{StaticResource TextSmall}" VerticalAlignment="Bottom" Margin="0,0,0,8" />
+                                </Grid>
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="56" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="边缘高光" Style="{StaticResource TextSmall}" />
+                                        <Slider x:Name="FresnelSlider" Minimum="0" Maximum="1.6" StepFrequency="0.05" Value="0.85"
+                                                Tag="FresnelFactor" ValueChanged="GlassSlider_Changed" />
+                                    </StackPanel>
+                                    <TextBlock x:Name="FresnelValue" Grid.Column="1" Text="0.85" Style="{StaticResource TextSmall}" VerticalAlignment="Bottom" Margin="0,0,0,8" />
+                                </Grid>
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="56" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="镜面反射" Style="{StaticResource TextSmall}" />
+                                        <Slider x:Name="GlareSlider" Minimum="0" Maximum="1.8" StepFrequency="0.05" Value="0.7"
+                                                Tag="GlareFactor" ValueChanged="GlassSlider_Changed" />
+                                    </StackPanel>
+                                    <TextBlock x:Name="GlareValue" Grid.Column="1" Text="0.70" Style="{StaticResource TextSmall}" VerticalAlignment="Bottom" Margin="0,0,0,8" />
+                                </Grid>
+                                <TextBlock Text="折射会取样卡片背后的场景；关闭玻璃后只保留背景星空，几乎不占用 GPU。"
+                                           Style="{StaticResource TextSmall}" />
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource GlassCard}">
+                            <StackPanel Spacing="12">
+                                <TextBlock Text="性能" Style="{StaticResource TextSectionTitle}" />
+                                <TextBlock Text="窗口失焦或最小化时会自动降帧，降低集成显卡的持续占用。" Style="{StaticResource TextBody}" />
+                                <TextBlock x:Name="PerfText" Style="{StaticResource TextSmall}" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource GlassCard}">
+                            <StackPanel Spacing="12">
+                                <Grid>
+                                    <TextBlock Text="背景" Style="{StaticResource TextSectionTitle}" />
+                                    <TextBlock x:Name="BackgroundStatusText" Text="默认 · 深色方块" Style="{StaticResource TextSmall}"
+                                               HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                </Grid>
+                                <TextBlock Text="可以使用图片或视频作为启动器背景，导入后会先进入裁切预览，确认后才生效。"
+                                           Style="{StaticResource TextBody}" TextWrapping="Wrap" />
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Button Content="选择图片" Style="{StaticResource GhostButton}" Height="34" Padding="14,0"
+                                            Click="BackgroundImage_Click" />
+                                    <Button Content="选择视频" Style="{StaticResource GhostButton}" Height="34" Padding="14,0"
+                                            Click="BackgroundVideo_Click" />
+                                    <Button Content="恢复默认背景" Style="{StaticResource GhostButton}" Height="34" Padding="14,0"
+                                            Click="BackgroundDefault_Click" />
+                                </StackPanel>
+                                <TextBlock x:Name="BackgroundHint" Text="图片和视频都只保存在本地，不会上传。" Style="{StaticResource TextSmall}" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource GlassCard}">
+                            <StackPanel Spacing="12">
+                                <Grid>
+                                    <TextBlock Text="背景音乐" Style="{StaticResource TextSectionTitle}" />
+                                    <TextBlock x:Name="MusicHint" Text="未导入音乐" Style="{StaticResource TextSmall}"
+                                               HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                </Grid>
+                                <TextBlock Text="支持 mp3 / wav / flac / m4a / ogg 等格式。导入后右下角会出现快捷音乐台。"
+                                           Style="{StaticResource TextBody}" TextWrapping="Wrap" />
+                                <StackPanel x:Name="MusicListPanel" Spacing="6" />
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Button Content="导入音乐" Style="{StaticResource GhostButton}" Height="34" Padding="14,0"
+                                            Click="ImportMusic_Click" />
+                                    <Button Content="清空列表" Style="{StaticResource GhostButton}" Height="34" Padding="14,0"
+                                            Click="MusicClear_Click" />
+                                    <ComboBox x:Name="MusicModeCombo" Width="152" MinHeight="38"
+                                              Foreground="{StaticResource BrushText}" Background="{StaticResource BrushField}"
+                                              BorderBrush="{StaticResource BrushFieldBorder}" SelectionChanged="MusicMode_Changed">
+                                        <ComboBoxItem Content="单曲循环" Tag="one" />
+                                        <ComboBoxItem Content="列表循环" Tag="list" />
+                                        <ComboBoxItem Content="随机播放" Tag="shuffle" />
+                                    </ComboBox>
+                                </StackPanel>
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="音量" Style="{StaticResource TextSmall}" VerticalAlignment="Center" />
+                                    <Slider x:Name="MusicVolumeSlider" Grid.Column="1" Minimum="0" Maximum="1" StepFrequency="0.01"
+                                            ValueChanged="MusicVolume_Changed" VerticalAlignment="Center" />
+                                    <TextBlock x:Name="MusicVolumeText" Grid.Column="2" Text="65%" Style="{StaticResource TextSmall}"
+                                               VerticalAlignment="Center" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
+                    <StackPanel x:Name="AboutPanel" Spacing="16" Visibility="Collapsed">
+                        <Border Style="{StaticResource GlassCard}">
+                            <StackPanel Spacing="14">
+                                <TextBlock Text="关于 NovaLink Lumen" Style="{StaticResource TextSectionTitle}" />
+                                <TextBlock x:Name="VersionText" FontSize="26" FontWeight="SemiBold" />
+                                <TextBlock Text="NovaLink 系列的 Minecraft Java Edition 启动器。原生界面，账户、实例与设置都保存在本机。"
+                                           Style="{StaticResource TextBody}" />
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <Button x:Name="GitHubButton" Style="{StaticResource AccentButton}" Height="40" Padding="16,0" Click="GitHub_Click">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <FontIcon Glyph="&#xE8A5;" FontSize="13" />
+                                            <TextBlock Text="GitHub Releases" FontSize="13" />
+                                        </StackPanel>
+                                    </Button>
+                                    <Button x:Name="CheckUpdateButton" AutomationProperties.AutomationId="SettingsCheckUpdate" Content="检查更新" Style="{StaticResource GhostButton}"
+                                            Height="40" Padding="14,0" Click="CheckUpdate_Click" />
+                                    <Button x:Name="OpenDataButton" Content="打开数据目录" Style="{StaticResource GhostButton}"
+                                            Height="40" Padding="14,0" Click="OpenData_Click" />
+                                </StackPanel>
+                                <TextBlock x:Name="DataPathText" Style="{StaticResource TextSmall}" />
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource GlassCard}">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="版本策略" Style="{StaticResource TextSectionTitle}" />
+                                <TextBlock Text="NovaLink Lumen V1.4.0。升级会保留账户、皮肤、实例与游戏目录，卸载时会单独询问是否删除启动器数据。"
+                                           Style="{StaticResource TextBody}" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Grid>
+            </ScrollViewer>
+        </Grid>
+    </Grid>
+</Page>

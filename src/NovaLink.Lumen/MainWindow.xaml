@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Window
+    x:Class="NovaLink.Lumen.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:views="using:NovaLink.Lumen.Views"
+    Title="NovaLink Lumen">
+
+    <Grid x:Name="RootLayout" Background="{StaticResource BrushBg}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="32" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Grid x:Name="DragRegion" Grid.Row="0" Background="Transparent">
+            <StackPanel Orientation="Horizontal" Spacing="8" Margin="18,0,0,0"
+                        VerticalAlignment="Center" HorizontalAlignment="Left">
+                <Viewbox Width="13" Height="13">
+                    <Path Data="M12 2 L22 8 L22 18 L12 24 L2 18 L2 8 Z"
+                          Fill="{StaticResource BrushAccent}" />
+                </Viewbox>
+                <TextBlock Text="NOVALINK" FontSize="10" FontWeight="SemiBold"
+                           CharacterSpacing="200" Foreground="{StaticResource BrushTextSecondary}" />
+                <TextBlock Text="LUMEN" FontSize="10" FontWeight="SemiBold"
+                           CharacterSpacing="200" Foreground="{StaticResource BrushTextTertiary}" />
+            </StackPanel>
+        </Grid>
+
+        <views:ShellPage x:Name="Shell" Grid.Row="1" />
+
+        <Grid x:Name="ModalLayer" Grid.RowSpan="2" Visibility="Collapsed" IsHitTestVisible="True" />
+
+        <Grid x:Name="SplashLayer" Grid.RowSpan="2" Background="{StaticResource BrushBg}">
+            <Grid>
+                <Ellipse x:Name="SplashMint" Width="620" Height="620" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-230,-190,0">
+                    <Ellipse.Fill>
+                        <RadialGradientBrush>
+                            <GradientStop Color="#337CEBD6" Offset="0" />
+                            <GradientStop Color="#0004060B" Offset="1" />
+                        </RadialGradientBrush>
+                    </Ellipse.Fill>
+                </Ellipse>
+                <Ellipse x:Name="SplashViolet" Width="460" Height="460" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-120,-180">
+                    <Ellipse.Fill>
+                        <RadialGradientBrush>
+                            <GradientStop Color="#2EA996FF" Offset="0" />
+                            <GradientStop Color="#0004060B" Offset="1" />
+                        </RadialGradientBrush>
+                    </Ellipse.Fill>
+                </Ellipse>
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="16">
+                    <Image Width="92" Height="92" Source="ms-appx:///Assets/Images/lumen-logo.svg" />
+                    <StackPanel Spacing="2" HorizontalAlignment="Center">
+                        <TextBlock Text="NOVALINK LUMEN" FontSize="10" CharacterSpacing="240" FontWeight="SemiBold"
+                                   Foreground="{StaticResource BrushTextTertiary}" HorizontalAlignment="Center" />
+                        <TextBlock Text="把世界，折射成光。" FontSize="28" FontWeight="SemiBold"
+                                   CharacterSpacing="-10" HorizontalAlignment="Center" Margin="0,8,0,0" />
+                    </StackPanel>
+                    <ProgressRing IsActive="True" Width="24" Height="24" Foreground="{StaticResource BrushMint}" Margin="0,14,0,0" />
+                    <TextBlock x:Name="SplashStatus" Text="正在准备液态玻璃…" FontSize="11.5"
+                               Foreground="{StaticResource BrushTextTertiary}" HorizontalAlignment="Center" />
+                </StackPanel>
+                <TextBlock Text="WINDOWS 10 / 11 · X64 · 1.4.0" FontSize="9.5" CharacterSpacing="160"
+                           Foreground="{StaticResource BrushTextTertiary}" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,26" />
+            </Grid>
+        </Grid>
+
+    </Grid>
+</Window>

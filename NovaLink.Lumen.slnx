@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/NovaLink.Lumen.Core/NovaLink.Lumen.Core.csproj" />
+    <Project Path="src/NovaLink.Lumen.Services/NovaLink.Lumen.Services.csproj" />
+    <Project Path="src/NovaLink.Lumen/NovaLink.Lumen.csproj">
+      <Platform Project="x86" />
+    </Project>
+  </Folder>
+</Solution>

@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+    x:Class="NovaLink.Lumen.Views.Pages.DiscoverPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Background="Transparent">
+
+    <!-- 顶部留白放在滚动内容里，滚动时卡片才能真正穿过顶栏。 -->
+    <ScrollViewer VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled" Padding="0">
+        <StackPanel Spacing="14" Margin="4,82,4,18">
+
+            <Grid>
+                <StackPanel Spacing="5">
+                    <TextBlock Text="CONTENT ATLAS" Style="{StaticResource TextEyebrow}" />
+                    <TextBlock Text="发现" Style="{StaticResource TextPageTitle}" />
+                    <TextBlock Text="从 Modrinth 的开放内容库，为你的版本挑选下一束光。" Style="{StaticResource TextBody}" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" VerticalAlignment="Bottom">
+                    <Border Style="{StaticResource Pill}" Padding="12,7">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon Glyph="&#xE774;" FontSize="12" Foreground="{StaticResource BrushMint}" />
+                            <TextBlock Text="Modrinth 资源" FontSize="11" Foreground="{StaticResource BrushTextSecondary}" />
+                        </StackPanel>
+                    </Border>
+                    <Button Style="{StaticResource GhostButton}" Height="38" Padding="14,0" Click="ImportModpack_Click">
+                        <StackPanel Orientation="Horizontal" Spacing="7">
+                            <FontIcon Glyph="&#xE8B5;" FontSize="13" />
+                            <TextBlock Text="导入整合包" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource GhostButton}" Height="38" Padding="14,0" Click="OpenLibrary_Click">
+                        <StackPanel Orientation="Horizontal" Spacing="7">
+                            <FontIcon Glyph="&#xE8F1;" FontSize="13" />
+                            <TextBlock Text="我的资源库" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Grid>
+
+            <Border Style="{StaticResource GlassCard}" Padding="26,24">
+                <Grid>
+                    <Grid Width="250" Height="160" HorizontalAlignment="Right" VerticalAlignment="Top"
+                          Margin="0,-20,-10,0" IsHitTestVisible="False" Opacity="0.95">
+                        <Ellipse x:Name="DiscoverOrbA" Width="96" Height="96" HorizontalAlignment="Right" VerticalAlignment="Top"
+                                 Margin="0,6,18,0">
+                            <Ellipse.Fill>
+                                <RadialGradientBrush>
+                                    <GradientStop Color="#4A7CEBD6" Offset="0" />
+                                    <GradientStop Color="#007CEBD6" Offset="1" />
+                                </RadialGradientBrush>
+                            </Ellipse.Fill>
+                        </Ellipse>
+                        <Ellipse x:Name="DiscoverOrbB" Width="54" Height="54" HorizontalAlignment="Right" VerticalAlignment="Top"
+                                 Margin="0,98,120,0">
+                            <Ellipse.Fill>
+                                <RadialGradientBrush>
+                                    <GradientStop Color="#42A996FF" Offset="0" />
+                                    <GradientStop Color="#00A996FF" Offset="1" />
+                                </RadialGradientBrush>
+                            </Ellipse.Fill>
+                        </Ellipse>
+                        <Ellipse x:Name="DiscoverOrbC" Width="26" Height="26" HorizontalAlignment="Right" VerticalAlignment="Top"
+                                 Margin="0,22,134,0">
+                            <Ellipse.Fill>
+                                <RadialGradientBrush>
+                                    <GradientStop Color="#4A6AA8FF" Offset="0" />
+                                    <GradientStop Color="#006AA8FF" Offset="1" />
+                                </RadialGradientBrush>
+                            </Ellipse.Fill>
+                        </Ellipse>
+                    </Grid>
+                    <StackPanel Spacing="12" MaxWidth="760" HorizontalAlignment="Left">
+                        <TextBlock Text="给世界加一点折射。" FontSize="30" FontWeight="SemiBold" CharacterSpacing="-12" />
+                        <TextBlock x:Name="HeroSubtitle" Text="模组、资源包、光影与整合包。先浏览全部内容，需要时再按版本或加载器筛选。"
+                                   Style="{StaticResource TextBody}" TextWrapping="Wrap" />
+                        <Grid Margin="0,4,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="SearchBox" Style="{StaticResource FieldBox}" PlaceholderText="搜索模组、作者或中文关键词（如 钠、苹果皮）"
+                                     AutomationProperties.AutomationId="DiscoverSearch" KeyDown="SearchBox_KeyDown" />
+                            <Button x:Name="SearchButton" Grid.Column="1" Content="搜索" Style="{StaticResource AccentButton}"
+                                    Height="44" Margin="10,0,0,0" Padding="24,0" Click="Search_Click" AutomationProperties.AutomationId="DiscoverSearchButton" />
+                        </Grid>
+                    </StackPanel>
+                    <StackPanel HorizontalAlignment="Right" VerticalAlignment="Bottom" Spacing="7">
+                        <Border Style="{StaticResource Pill}" HorizontalAlignment="Right">
+                            <TextBlock x:Name="SourceText" Text="MODRINTH · 实时目录" FontSize="10.5" Foreground="{StaticResource BrushTextSecondary}" />
+                        </Border>
+                        <TextBlock x:Name="CountText" Text="正在读取内容库" Style="{StaticResource TextSmall}" HorizontalAlignment="Right" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <ScrollViewer HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled" HorizontalScrollMode="Enabled">
+                <StackPanel x:Name="CategoryRow" Orientation="Horizontal" Spacing="7" Padding="0,1,0,1" />
+            </ScrollViewer>
+
+            <ScrollViewer HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled" HorizontalScrollMode="Enabled">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button x:Name="TypeVanilla" Tag="vanilla" Style="{StaticResource GhostButton}" Height="38" Padding="16,0" Click="Type_Click"
+                            AutomationProperties.AutomationId="TypeVanilla" AutomationProperties.Name="原版游戏">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon Glyph="&#xE7FC;" FontSize="12" />
+                            <TextBlock Text="原版游戏" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="TypeMod" Content="模组" Tag="mod" Style="{StaticResource GhostButton}" Height="38" Padding="16,0" Click="Type_Click" />
+                    <Button x:Name="TypeResource" Content="资源包" Tag="resourcepack" Style="{StaticResource GhostButton}" Height="38" Padding="16,0" Click="Type_Click" />
+                    <Button x:Name="TypeShader" Content="光影" Tag="shader" Style="{StaticResource GhostButton}" Height="38" Padding="16,0" Click="Type_Click" />
+                    <Button x:Name="TypeModpack" Content="整合包" Tag="modpack" Style="{StaticResource GhostButton}" Height="38" Padding="16,0" Click="Type_Click" />
+                    <Border x:Name="FilterDivider" Width="1" Background="{StaticResource BrushBorderSubtle}" Margin="4,7" />
+                    <ComboBox x:Name="VersionCombo" Width="156" Height="38" VerticalAlignment="Center"
+                              Foreground="{StaticResource BrushText}" Background="{StaticResource BrushField}"
+                              BorderBrush="{StaticResource BrushFieldBorder}"
+                              PlaceholderText="全部版本" SelectionChanged="Filter_Changed" />
+                    <ComboBox x:Name="LoaderCombo" Width="132" Height="38" VerticalAlignment="Center"
+                              Foreground="{StaticResource BrushText}" Background="{StaticResource BrushField}"
+                              BorderBrush="{StaticResource BrushFieldBorder}"
+                              PlaceholderText="全部加载器" SelectionChanged="Filter_Changed" />
+                    <ComboBox x:Name="InstanceCombo" Width="190" Height="38" VerticalAlignment="Center"
+                              Foreground="{StaticResource BrushText}" Background="{StaticResource BrushField}"
+                              BorderBrush="{StaticResource BrushFieldBorder}"
+                              PlaceholderText="安装目标实例" />
+                    <TextBlock x:Name="StatusText" Style="{StaticResource TextSmall}" VerticalAlignment="Center" Margin="8,0,8,0"
+                               TextTrimming="CharacterEllipsis" MaxWidth="320" />
+                </StackPanel>
+            </ScrollViewer>
+
+            <StackPanel x:Name="ResultsPanel" Spacing="14" MinHeight="360" />
+
+            <Grid x:Name="FooterBar" Margin="0,2,0,0">
+                <TextBlock x:Name="DisplayText" Style="{StaticResource TextSmall}" VerticalAlignment="Center" />
+                <Button x:Name="LoadMoreButton" HorizontalAlignment="Center" Style="{StaticResource GhostButton}" Height="36" Padding="22,0"
+                        Click="LoadMore_Click" Visibility="Collapsed">
+                    <StackPanel Orientation="Horizontal" Spacing="7">
+                        <FontIcon Glyph="&#xE70D;" FontSize="12" />
+                        <TextBlock Text="加载更多" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+                <TextBlock x:Name="FooterHint" Text="内容由 Modrinth 提供 · 下载前会询问保存位置 · 需要网络连接"
+                           Style="{StaticResource TextSmall}" HorizontalAlignment="Right" VerticalAlignment="Center" />
+            </Grid>
+
+            <StackPanel x:Name="EmptyPanel" Spacing="10" HorizontalAlignment="Center" Margin="0,80,0,80" Visibility="Collapsed">
+                <FontIcon Glyph="&#xE721;" FontSize="26" Foreground="{StaticResource BrushTextTertiary}" HorizontalAlignment="Center" />
+                <TextBlock x:Name="EmptyText" Text="没有找到匹配的内容" Foreground="{StaticResource BrushTextSecondary}" HorizontalAlignment="Center" />
+                <TextBlock Text="换一个关键词，或放宽版本与加载器筛选。" Style="{StaticResource TextSmall}" HorizontalAlignment="Center" />
+                <Button Content="重试" Style="{StaticResource GhostButton}" Height="34" Padding="18,0" Click="Retry_Click" HorizontalAlignment="Center" />
+            </StackPanel>
+
+        </StackPanel>
+    </ScrollViewer>
+</Page>

@@ -1,0 +1,77 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="72" y1="44" x2="440" y2="470" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0D1B2E"/>
+      <stop offset=".52" stop-color="#07101D"/>
+      <stop offset="1" stop-color="#03060C"/>
+    </linearGradient>
+    <linearGradient id="rim" x1="96" y1="64" x2="420" y2="448" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8FE7FF" stop-opacity=".85"/>
+      <stop offset=".4" stop-color="#6D8FFF" stop-opacity=".18"/>
+      <stop offset="1" stop-color="#C9A7FF" stop-opacity=".55"/>
+    </linearGradient>
+    <linearGradient id="top" x1="256" y1="138" x2="256" y2="260" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#C8FBFF"/>
+      <stop offset=".36" stop-color="#79E5FF"/>
+      <stop offset="1" stop-color="#3CAED4"/>
+    </linearGradient>
+    <linearGradient id="left" x1="168" y1="218" x2="256" y2="382" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5C86FF"/>
+      <stop offset="1" stop-color="#1B3E9F"/>
+    </linearGradient>
+    <linearGradient id="right" x1="344" y1="218" x2="256" y2="382" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#B49BFF"/>
+      <stop offset="1" stop-color="#5C42C9"/>
+    </linearGradient>
+    <linearGradient id="beam" x1="128" y1="96" x2="352" y2="332" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity=".9"/>
+      <stop offset=".35" stop-color="#A9EEFF" stop-opacity=".35"/>
+      <stop offset="1" stop-color="#8B8DFF" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="aura" cx="0" cy="0" r="1" gradientTransform="translate(256 250) rotate(90) scale(204)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#61D8FF" stop-opacity=".26"/>
+      <stop offset="1" stop-color="#61D8FF" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="blur24" x="60" y="60" width="392" height="392" filterUnits="userSpaceOnUse">
+      <feGaussianBlur stdDeviation="24"/>
+    </filter>
+    <filter id="soft" x="120" y="100" width="272" height="272" filterUnits="userSpaceOnUse">
+      <feGaussianBlur stdDeviation="5"/>
+    </filter>
+    <clipPath id="squircle">
+      <rect x="16" y="16" width="480" height="480" rx="128"/>
+    </clipPath>
+    <linearGradient id="edge" x1="48" y1="48" x2="464" y2="464" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E9FDFF" stop-opacity=".55"/>
+      <stop offset=".35" stop-color="#80C7FF" stop-opacity=".08"/>
+      <stop offset=".72" stop-color="#AFA2FF" stop-opacity=".3"/>
+      <stop offset="1" stop-color="#F6DFFF" stop-opacity=".5"/>
+    </linearGradient>
+  </defs>
+  <g clip-path="url(#squircle)">
+    <rect x="16" y="16" width="480" height="480" rx="128" fill="url(#bg)"/>
+    <rect x="16" y="16" width="480" height="480" rx="128" fill="url(#aura)"/>
+    <g opacity=".42" filter="url(#blur24)">
+      <ellipse cx="174" cy="172" rx="118" ry="86" fill="#28BEE7" fill-opacity=".34"/>
+      <ellipse cx="360" cy="344" rx="122" ry="110" fill="#6A58FF" fill-opacity=".3"/>
+    </g>
+    <path d="M116 292C170 200 236 157 321 146" stroke="url(#beam)" stroke-width="30" stroke-linecap="round" filter="url(#soft)" opacity=".65"/>
+    <g filter="url(#soft)" opacity=".55">
+      <path d="M86 250L256 156L426 250" stroke="#A7F4FF" stroke-width="7" stroke-linecap="round"/>
+    </g>
+    <path d="M256 142L356 200L256 258L156 200L256 142Z" fill="url(#top)"/>
+    <path d="M156 200L256 258V382L156 324V200Z" fill="url(#left)"/>
+    <path d="M356 200L256 258V382L356 324V200Z" fill="url(#right)"/>
+    <path d="M256 142L356 200L256 258L156 200L256 142Z" fill="white" fill-opacity=".11"/>
+    <path d="M156 200L256 258" stroke="#D8FAFF" stroke-opacity=".72" stroke-width="2.5"/>
+    <path d="M356 200L256 258" stroke="#F2E8FF" stroke-opacity=".55" stroke-width="2.5"/>
+    <path d="M256 258V382" stroke="#041225" stroke-opacity=".35" stroke-width="3"/>
+    <path d="M176 211L248 252" stroke="white" stroke-opacity=".38" stroke-width="9" stroke-linecap="round"/>
+    <path d="M188 304L236 330" stroke="#A9C6FF" stroke-opacity=".22" stroke-width="7" stroke-linecap="round"/>
+    <circle cx="319" cy="292" r="7" fill="#DDFBFF" fill-opacity=".9"/>
+    <circle cx="319" cy="292" r="22" fill="#A0F4FF" fill-opacity=".16"/>
+    <path d="M306 146L338 130" stroke="white" stroke-opacity=".65" stroke-width="4" stroke-linecap="round"/>
+  </g>
+  <rect x="17.5" y="17.5" width="477" height="477" rx="126.5" stroke="url(#edge)" stroke-width="3"/>
+  <rect x="24" y="24" width="464" height="464" rx="120" stroke="white" stroke-opacity=".045" stroke-width="1.5"/>
+</svg>

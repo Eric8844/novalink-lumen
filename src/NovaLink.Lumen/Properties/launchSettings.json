@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "NovaLink.Lumen (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "NovaLink.Lumen (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}

@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+    x:Class="NovaLink.Lumen.Views.Pages.ForumPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <Grid Margin="0,74,0,0">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Grid Margin="0,0,0,18">
+            <StackPanel Spacing="5">
+                <TextBlock Text="NOVALINK FORUM" Style="{StaticResource TextEyebrow}" />
+                <TextBlock Text="论坛" Style="{StaticResource TextPageTitle}" />
+                <TextBlock Text="把观点留在这里，让讨论成为下一次折射。" Style="{StaticResource TextBody}" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right" VerticalAlignment="Bottom">
+                <Button x:Name="CommunityButton" Style="{StaticResource GhostButton}" Click="Community_Click">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon Glyph="&#xE774;" FontSize="14" />
+                        <TextBlock Text="NovaLink 社区" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+                <Button x:Name="RefreshButton" AutomationProperties.AutomationId="ForumRefreshButton" Style="{StaticResource GhostButton}" Click="Refresh_Click">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon Glyph="&#xE72C;" FontSize="14" />
+                        <TextBlock Text="刷新" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+        </Grid>
+
+        <ScrollViewer x:Name="ContentScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel x:Name="ContentStack" Spacing="16">
+
+                <Border Style="{StaticResource GlassCard}" Padding="26">
+                    <Grid>
+                        <StackPanel Spacing="10" Margin="0,0,220,0">
+                            <TextBlock Text="NOVALINK FORUM" Style="{StaticResource TextEyebrow}" />
+                            <TextBlock Text="让每一个观点，都有被看见的角度。" FontSize="27" FontWeight="SemiBold" Foreground="{StaticResource BrushText}" />
+                            <TextBlock Text="创建新话题会先经过 AI 审核，未通过时转交管理员。" Style="{StaticResource TextSmall}" />
+                            <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
+                                <Border Style="{StaticResource Pill}">
+                                    <TextBlock Text="话题 5 秒" Style="{StaticResource TextSmall}" />
+                                </Border>
+                                <Border Style="{StaticResource Pill}">
+                                    <TextBlock Text="动态 60 秒" Style="{StaticResource TextSmall}" />
+                                </Border>
+                                <Border Style="{StaticResource Pill}">
+                                    <TextBlock Text="AI 审核" Style="{StaticResource TextSmall}" />
+                                </Border>
+                            </StackPanel>
+                        </StackPanel>
+                        <Border x:Name="MeCard" HorizontalAlignment="Right" VerticalAlignment="Center" Background="{StaticResource BrushFillSoft}" BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1" CornerRadius="18" Padding="14,10" Tapped="MeCard_Tapped">
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <Border x:Name="MeAvatarHost" Width="38" Height="38" CornerRadius="12" Background="#267CEBD6" />
+                                <StackPanel VerticalAlignment="Center" Spacing="2">
+                                    <TextBlock x:Name="MeName" Text="未登录" FontSize="13.5" FontWeight="SemiBold" Foreground="{StaticResource BrushText}" />
+                                    <TextBlock x:Name="MeKind" Text="离线只读" Style="{StaticResource TextSmall}" />
+                                    <TextBlock x:Name="MeStats" Text="" Style="{StaticResource TextSmall}" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </Border>
+
+                <Grid>
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <Button x:Name="TopicsTabButton" AutomationProperties.AutomationId="ForumTopicsTab" Click="TopicsTab_Click" Background="Transparent" BorderThickness="0" Padding="8,6">
+                            <StackPanel Spacing="5">
+                                <StackPanel Orientation="Horizontal" Spacing="7">
+                                    <FontIcon Glyph="&#xE8BD;" FontSize="13" />
+                                    <TextBlock Text="话题" FontSize="13.5" FontWeight="SemiBold" />
+                                </StackPanel>
+                                <Border x:Name="TopicsTabLine" Height="2" CornerRadius="1" Background="{StaticResource BrushMint}" />
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="FeedTabButton" AutomationProperties.AutomationId="ForumFeedTab" Click="FeedTab_Click" Background="Transparent" BorderThickness="0" Padding="8,6">
+                            <StackPanel Spacing="5">
+                                <StackPanel Orientation="Horizontal" Spacing="7">
+                                    <FontIcon Glyph="&#xE7C3;" FontSize="13" />
+                                    <TextBlock Text="动态" FontSize="13.5" FontWeight="SemiBold" />
+                                </StackPanel>
+                                <Border x:Name="FeedTabLine" Height="2" CornerRadius="1" Background="Transparent" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                    <TextBlock x:Name="StatusText" HorizontalAlignment="Right" VerticalAlignment="Center" Style="{StaticResource TextSmall}" />
+                </Grid>
+
+                <StackPanel x:Name="TopicsPanel" Spacing="12">
+                    <Border Style="{StaticResource GlassCard}" Padding="20">
+                        <Grid>
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="开始一个新话题" FontSize="17" FontWeight="SemiBold" Foreground="{StaticResource BrushText}" />
+                                <TextBlock x:Name="TopicHint" Text="在论坛表达 10 次观点后可以创建话题。" Style="{StaticResource TextSmall}" />
+                            </StackPanel>
+                            <Button x:Name="NewTopicButton" AutomationProperties.AutomationId="ForumNewTopicButton" Style="{StaticResource AccentButton}" HorizontalAlignment="Right" VerticalAlignment="Center" Click="NewTopic_Click">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon Glyph="&#xE710;" FontSize="13" />
+                                    <TextBlock Text="创建话题" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+                    </Border>
+                    <StackPanel x:Name="TopicList" Spacing="10" />
+                </StackPanel>
+
+                <StackPanel x:Name="TopicDetailPanel" Spacing="12" Visibility="Collapsed">
+                    <Button Style="{StaticResource GhostButton}" HorizontalAlignment="Left" Click="BackToTopics_Click">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE72B;" FontSize="13" />
+                            <TextBlock Text="返回话题" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Border Style="{StaticResource GlassCard}" Padding="24">
+                        <StackPanel Spacing="12">
+                            <Grid>
+                                <StackPanel Spacing="4">
+                                    <TextBlock x:Name="DetailTitle" FontSize="25" FontWeight="SemiBold" Foreground="{StaticResource BrushText}" TextWrapping="Wrap" />
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <TextBlock x:Name="DetailAuthor" Style="{StaticResource TextSmall}" />
+                                        <TextBlock Text="·" Style="{StaticResource TextSmall}" />
+                                        <TextBlock x:Name="DetailTime" Style="{StaticResource TextSmall}" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Grid>
+                            <TextBlock x:Name="DetailBody" Style="{StaticResource TextBody}" TextWrapping="Wrap" LineHeight="24" />
+                        </StackPanel>
+                    </Border>
+                    <StackPanel x:Name="ReplyList" Spacing="8" />
+                    <Border Style="{StaticResource GlassCard}" Padding="18">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="留下你的回复" Style="{StaticResource TextBody}" FontWeight="SemiBold" />
+                            <TextBox x:Name="ReplyBox" AutomationProperties.AutomationId="ForumReplyBox" PlaceholderText="写点什么…（5 秒一次）" AcceptsReturn="True" TextWrapping="Wrap" Height="90" Style="{StaticResource FieldBox}" />
+                            <Grid>
+                                <TextBlock x:Name="ReplyHint" Text="回复会立即显示。" Style="{StaticResource TextSmall}" VerticalAlignment="Center" />
+                                <Button x:Name="ReplyButton" AutomationProperties.AutomationId="ForumReplyButton" Style="{StaticResource AccentButton}" HorizontalAlignment="Right" Click="Reply_Click">
+                                    <TextBlock Text="回复" />
+                                </Button>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <StackPanel x:Name="FeedPanel" Spacing="12" Visibility="Collapsed">
+                    <Border Style="{StaticResource GlassCard}" Padding="20">
+                        <StackPanel Spacing="10">
+                            <Grid>
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="分享此刻的观点" FontSize="17" FontWeight="SemiBold" Foreground="{StaticResource BrushText}" />
+                                    <TextBlock Text="每条动态都会经过 AI 审核，每 60 秒最多一次。" Style="{StaticResource TextSmall}" />
+                                </StackPanel>
+                                <TextBlock x:Name="FeedHint" HorizontalAlignment="Right" VerticalAlignment="Top" Style="{StaticResource TextSmall}" />
+                            </Grid>
+                            <TextBox x:Name="MomentBox" AutomationProperties.AutomationId="ForumMomentBox" PlaceholderText="今天有什么想法？" AcceptsReturn="True" TextWrapping="Wrap" Height="86" Style="{StaticResource FieldBox}" />
+                            <Button x:Name="MomentButton" AutomationProperties.AutomationId="ForumMomentButton" Style="{StaticResource AccentButton}" HorizontalAlignment="Right" Click="Moment_Click">
+                                <StackPanel Orientation="Horizontal" Spacing="7">
+                                    <FontIcon Glyph="&#xE724;" FontSize="13" />
+                                    <TextBlock Text="发布动态" />
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </Border>
+                    <StackPanel x:Name="FeedList" Spacing="10" />
+                </StackPanel>
+
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</Page>

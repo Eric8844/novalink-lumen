@@ -1,0 +1,314 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+    x:Class="NovaLink.Lumen.Views.Pages.HomePage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Background="Transparent"
+    SizeChanged="HomePage_SizeChanged">
+
+    <!-- 顶部留白放在滚动内容里，滚动时正文才能真正穿过顶栏。 -->
+    <ScrollViewer VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled" Padding="0">
+        <StackPanel Spacing="18" Margin="4,82,4,14">
+
+            <Grid>
+                <StackPanel Spacing="6">
+                    <TextBlock Text="NOVALINK LUMEN" Style="{StaticResource TextEyebrow}" />
+                    <TextBlock x:Name="Greeting" Text="晚上好，Nova。" FontSize="40" FontWeight="SemiBold"
+                               CharacterSpacing="-16" Margin="0,2,0,0" />
+                    <TextBlock x:Name="GreetingSub" Text="光已经折射就绪。你的世界正在等待下一次启程。"
+                               Style="{StaticResource TextBody}" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" VerticalAlignment="Bottom">
+                    <Button x:Name="GameRootButton" AutomationProperties.AutomationId="HomeGameRootButton"
+                            Background="Transparent" BorderThickness="0" Padding="0" Height="34"
+                            Click="GameRoot_Click" ToolTipService.ToolTip="切换 .minecraft 游戏目录">
+                        <Border Style="{StaticResource Pill}" Height="34" Padding="12,0"
+                                Background="{StaticResource BrushField}" BorderBrush="{StaticResource BrushFieldBorder}">
+                            <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
+                                <FontIcon Glyph="&#xE8B7;" FontSize="12" Foreground="{StaticResource BrushTextSecondary}" />
+                                <TextBlock x:Name="GameRootText" Text=".lumen" FontSize="11" MaxWidth="220"
+                                           TextTrimming="CharacterEllipsis" Foreground="{StaticResource BrushTextSecondary}" />
+                                <FontIcon Glyph="&#xE70D;" FontSize="9" Foreground="{StaticResource BrushTextTertiary}" />
+                            </StackPanel>
+                        </Border>
+                    </Button>
+                    <Border Style="{StaticResource Pill}" Height="34" Padding="12,0"
+                            Background="{StaticResource BrushField}" BorderBrush="{StaticResource BrushFieldBorder}">
+                        <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
+                            <FontIcon Glyph="&#xE787;" FontSize="12" Foreground="{StaticResource BrushTextSecondary}" />
+                            <TextBlock x:Name="DateText" Text="10月24日周六" FontSize="11"
+                                       Foreground="{StaticResource BrushTextSecondary}" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Grid>
+
+            <Grid ColumnSpacing="18">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="1.74*" />
+                    <ColumnDefinition Width="1*" />
+                </Grid.ColumnDefinitions>
+
+                <Border CornerRadius="28" BorderBrush="#30FFFFFF" BorderThickness="1" Height="358">
+                    <Grid>
+                        <Border x:Name="HeroArt" CornerRadius="27">
+                            <Border.Background>
+                                <ImageBrush ImageSource="ms-appx:///Assets/Images/hero-wilderness.jpg" Stretch="UniformToFill" />
+                            </Border.Background>
+                        </Border>
+                        <Border CornerRadius="27">
+                            <Border.Background>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                    <GradientStop Color="#F20A101B" Offset="0" />
+                                    <GradientStop Color="#D90A101B" Offset="0.42" />
+                                    <GradientStop Color="#550A101B" Offset="0.78" />
+                                    <GradientStop Color="#220A101B" Offset="1" />
+                                </LinearGradientBrush>
+                            </Border.Background>
+                        </Border>
+                        <Border CornerRadius="27">
+                            <Border.Background>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                    <GradientStop Color="#66000000" Offset="0" />
+                                    <GradientStop Color="#26000000" Offset="0.42" />
+                                    <GradientStop Color="#A6050A12" Offset="1" />
+                                </LinearGradientBrush>
+                            </Border.Background>
+                        </Border>
+
+                        <Grid Margin="26,22,26,22">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <StackPanel Orientation="Horizontal" Spacing="7">
+                                <Border Style="{StaticResource Pill}" Padding="10,4" Background="#66070D17" BorderBrush="#38FFFFFF">
+                                    <TextBlock Text="LATEST RELEASE" FontSize="9" FontWeight="SemiBold"
+                                               CharacterSpacing="120" Foreground="#FFDCE8F8" />
+                                </Border>
+                                <Border Style="{StaticResource Pill}" Padding="10,4" Background="#66070D17" BorderBrush="#38FFFFFF">
+                                    <TextBlock Text="JAVA EDITION" FontSize="9" FontWeight="SemiBold"
+                                               CharacterSpacing="120" Foreground="#FFDCE8F8" />
+                                </Border>
+                                <Border Style="{StaticResource Pill}" Padding="10,4" Background="#1F7CEBD6" BorderBrush="#4D7CEBD6">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <Ellipse Width="5" Height="5" Fill="{StaticResource BrushMint}" VerticalAlignment="Center" />
+                                        <TextBlock x:Name="ReadyText" Text="就绪" FontSize="9" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource BrushMint}" />
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+
+                            <Grid Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Left"
+                                  ColumnSpacing="16" RowSpacing="7">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+
+                                <TextBlock x:Name="HeroVersion" Grid.Row="0" Grid.Column="0" Text="—" FontSize="66"
+                                           FontWeight="SemiBold" Foreground="#FFF3F7FE" CharacterSpacing="-40"
+                                           LineHeight="66" VerticalAlignment="Bottom" HorizontalAlignment="Left" />
+                                <StackPanel Grid.Row="0" Grid.Column="1" VerticalAlignment="Bottom" Spacing="3"
+                                            Margin="0,0,0,6">
+                                    <TextBlock x:Name="HeroKernel" Text="尚未安装版本" FontSize="15" FontWeight="SemiBold"
+                                               Foreground="#FFF3F7FE" HorizontalAlignment="Left" />
+                                    <TextBlock x:Name="HeroState" Text="INSTANCE READY" Style="{StaticResource TextEyebrow}"
+                                               HorizontalAlignment="Left" />
+                                </StackPanel>
+
+                                <TextBlock x:Name="HeroName" Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
+                                           Text="从版本页安装你的第一个实例" FontSize="15" Foreground="#FFD8E4F5"
+                                           MaxWidth="620" HorizontalAlignment="Left" TextAlignment="Left" />
+                                <TextBlock x:Name="HeroTagline" Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2"
+                                           Text="把世界，折射成光 · 每一次启程，都有一束光在等你"
+                                           FontSize="13" Foreground="#FFD3E0F0" TextWrapping="Wrap" MaxWidth="520"
+                                           MaxLines="2" TextTrimming="CharacterEllipsis"
+                                           HorizontalAlignment="Left" TextAlignment="Left" />
+                                <StackPanel Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2" Orientation="Horizontal"
+                                            Spacing="7" Margin="0,5,0,0" HorizontalAlignment="Left">
+                                    <Border Style="{StaticResource Pill}" Padding="10,5" Background="#66070D17" BorderBrush="#38FFFFFF">
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <FontIcon Glyph="&#xE8B7;" FontSize="11" Foreground="#FFC8D6E8" />
+                                            <TextBlock x:Name="HeroMods" Text="0 个模组" FontSize="10.5" Foreground="#FFC8D6E8" />
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Style="{StaticResource Pill}" Padding="10,5" Background="#66070D17" BorderBrush="#38FFFFFF">
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <FontIcon Glyph="&#xE8B7;" FontSize="11" Foreground="#FFC8D6E8" />
+                                            <TextBlock x:Name="HeroWorlds" Text="0 个世界" FontSize="10.5" Foreground="#FFC8D6E8" />
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Style="{StaticResource Pill}" Padding="10,5" Background="#66070D17" BorderBrush="#38FFFFFF">
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <FontIcon Glyph="&#xE950;" FontSize="11" Foreground="#FFC8D6E8" />
+                                            <TextBlock x:Name="HeroMemory" Text="4096 MB" FontSize="10.5" Foreground="#FFC8D6E8" />
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+                            </Grid>
+
+                            <Grid Grid.Row="2">
+                                <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                                    <Button x:Name="HomePlayButton" Style="{StaticResource AccentButton}" AutomationProperties.AutomationId="HomePlayButton" Click="Play_Click">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <FontIcon x:Name="HomePlayIcon" Glyph="&#xE768;" FontSize="13" />
+                                            <TextBlock x:Name="HomePlayLabel" Text="开始游戏" FontSize="14" FontWeight="SemiBold" />
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Style="{StaticResource GhostButton}" Click="Versions_Click" Foreground="#FFF3F7FE"
+                                            Background="#59070D17" BorderBrush="#38FFFFFF">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <FontIcon Glyph="&#xE8B7;" FontSize="13" Foreground="#FFF3F7FE" />
+                                            <TextBlock Text="管理版本" FontSize="13.5" FontWeight="SemiBold" Foreground="#FFF3F7FE" />
+                                        </StackPanel>
+                                    </Button>
+                                    <StackPanel Margin="8,0,0,0" VerticalAlignment="Center" Spacing="1">
+                                        <TextBlock x:Name="LastPlayedTop" Text="尚未启动过" FontSize="10.5"
+                                                   Foreground="#FFC8D6E8" />
+                                        <TextBlock x:Name="HeroJava" Text="JAVA 21" Style="{StaticResource TextEyebrow}" Foreground="#FF93A7C2" />
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <Border x:Name="HeroQuote" HorizontalAlignment="Right" VerticalAlignment="Center" CornerRadius="16"
+                                        Background="#59070D17" BorderBrush="#24FFFFFF" BorderThickness="1" Padding="13,11">
+                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                        <Border Width="34" Height="34" CornerRadius="11" Background="{StaticResource BrushAccentSoft}">
+                                            <Viewbox Width="18" Height="18">
+                                                <Path Data="M12 2 L22 8 L22 18 L12 24 L2 18 L2 8 Z" Fill="{StaticResource BrushAccent}" />
+                                            </Viewbox>
+                                        </Border>
+                                        <StackPanel VerticalAlignment="Center" Spacing="1">
+                                            <TextBlock Text="把世界，折射成光" FontSize="12" FontWeight="SemiBold" Foreground="#FFF3F7FE" />
+                                            <TextBlock Text="每一次启程，都有一束光在等你" FontSize="9.5"
+                                                       Foreground="#FFAFC0D6" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+                        </Grid>
+                    </Grid>
+                </Border>
+
+                <StackPanel Grid.Column="1" Spacing="18">
+                    <Border x:Name="ContinueCard" Style="{StaticResource GlassCard}" Height="176" Padding="22,18" Background="{StaticResource BrushCardTint}">
+                        <Grid>
+                            <StackPanel Spacing="7">
+                                <StackPanel Orientation="Horizontal" Spacing="7">
+                                    <FontIcon Glyph="&#xE823;" FontSize="12" Foreground="{StaticResource BrushTextTertiary}" />
+                                    <TextBlock Text="继续旅程" FontSize="10" FontWeight="SemiBold" CharacterSpacing="100"
+                                               Foreground="{StaticResource BrushTextTertiary}" />
+                                </StackPanel>
+                                <TextBlock x:Name="ContinueName" Text="Dappled Camp" FontSize="26" FontWeight="SemiBold"
+                                           CharacterSpacing="-10" TextTrimming="CharacterEllipsis" />
+                                <TextBlock x:Name="ContinueMeta" Text="等待安装版本" Style="{StaticResource TextSmall}" />
+                                <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
+                                    <Button Width="38" Height="38" CornerRadius="12" Background="{StaticResource BrushAccent}"
+                                            BorderThickness="0" Padding="0" Click="Play_Click" HorizontalContentAlignment="Center">
+                                        <FontIcon Glyph="&#xE768;" FontSize="13" Foreground="#FF061018" />
+                                    </Button>
+                                    <Border Style="{StaticResource Pill}" Padding="10,5" Height="30">
+                                        <StackPanel Orientation="Horizontal" Spacing="5">
+                                            <FontIcon Glyph="&#xE8B7;" FontSize="10" Foreground="{StaticResource BrushTextSecondary}" />
+                                            <TextBlock x:Name="ContinueWorlds" Text="0 个世界" FontSize="10" Foreground="{StaticResource BrushTextSecondary}" />
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Style="{StaticResource Pill}" Padding="10,5" Height="30">
+                                        <StackPanel Orientation="Horizontal" Spacing="5">
+                                            <FontIcon Glyph="&#xE8B7;" FontSize="10" Foreground="{StaticResource BrushTextSecondary}" />
+                                            <TextBlock x:Name="ContinueMods" Text="0 个模组" FontSize="10" Foreground="{StaticResource BrushTextSecondary}" />
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+                            </StackPanel>
+                            <TextBlock Text="LAST&#10;PLAYED" HorizontalAlignment="Right" VerticalAlignment="Top"
+                                       FontSize="9" CharacterSpacing="120" TextAlignment="Right"
+                                       Foreground="{StaticResource BrushTextTertiary}" />
+                        </Grid>
+                    </Border>
+
+                    <Border x:Name="AccountCard" Style="{StaticResource GlassCard}" Height="164" Padding="22,18" Background="{StaticResource BrushCardTint}">
+                        <Grid>
+                            <StackPanel Spacing="8">
+                                <StackPanel Orientation="Horizontal" Spacing="12">
+                                    <Grid Width="44" Height="44">
+                                        <Border CornerRadius="13" Background="{StaticResource BrushAccentSoft}">
+                                            <TextBlock x:Name="AccountInitialHome" Text="N" FontSize="17" FontWeight="SemiBold"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Border>
+                                        <Border CornerRadius="13">
+                                            <Image x:Name="HomeAvatar" Stretch="UniformToFill" ImageFailed="HomeAvatar_ImageFailed" />
+                                        </Border>
+                                    </Grid>
+                                    <StackPanel VerticalAlignment="Center" Spacing="2">
+                                        <TextBlock x:Name="HomeAccountName" Text="未登录" FontSize="14" FontWeight="SemiBold" />
+                                        <TextBlock x:Name="HomeAccountKind" Text="添加一个账户开始游戏" Style="{StaticResource TextSmall}" />
+                                    </StackPanel>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Spacing="7" Margin="0,4,0,0">
+                                    <Ellipse x:Name="AccountDot" Width="5" Height="5" Fill="{StaticResource BrushMint}"
+                                             VerticalAlignment="Center" />
+                                    <TextBlock x:Name="AccountState" Text="等待账户" FontSize="10.5" Foreground="{StaticResource BrushMint}" />
+                                </StackPanel>
+                            </StackPanel>
+                            <Button Style="{StaticResource IconButton}" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                    Click="Account_Click">
+                                <FontIcon Glyph="&#xE70D;" FontSize="11" />
+                            </Button>
+                        </Grid>
+                    </Border>
+                </StackPanel>
+            </Grid>
+
+            <Grid ColumnSpacing="18">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="1.74*" />
+                    <ColumnDefinition Width="1*" />
+                </Grid.ColumnDefinitions>
+
+                <Border x:Name="VersionsCard" Style="{StaticResource GlassCard}" Padding="22,20" Background="{StaticResource BrushCardTint}">
+                    <StackPanel Spacing="14">
+                        <Grid>
+                            <StackPanel Spacing="3">
+                                <TextBlock Text="版本实例" Style="{StaticResource TextSectionTitle}" />
+                                <TextBlock x:Name="VersionCountText" Text="0 个已安装" Style="{StaticResource TextSmall}" />
+                            </StackPanel>
+                            <Button HorizontalAlignment="Right" VerticalAlignment="Center" Background="Transparent"
+                                    BorderThickness="0" Padding="0" Click="Versions_Click">
+                                <StackPanel Orientation="Horizontal" Spacing="5">
+                                    <TextBlock Text="全部版本" FontSize="11" Foreground="{StaticResource BrushTextSecondary}" />
+                                    <FontIcon Glyph="&#xE72A;" FontSize="10" Foreground="{StaticResource BrushTextTertiary}" />
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+                        <StackPanel x:Name="VersionList" Orientation="Horizontal" Spacing="10" />
+                    </StackPanel>
+                </Border>
+
+                <Border x:Name="NewsCard" Grid.Column="1" Style="{StaticResource GlassCard}" Padding="22,20" Background="{StaticResource BrushCardTint}">
+                    <StackPanel Spacing="12">
+                        <Grid>
+                            <StackPanel Spacing="3">
+                                <TextBlock Text="Lumen 快讯" Style="{StaticResource TextSectionTitle}" />
+                                <TextBlock Text="FROM MINECRAFT" Style="{StaticResource TextEyebrow}" />
+                            </StackPanel>
+                            <Button Style="{StaticResource IconButton}" HorizontalAlignment="Right" Click="RefreshNews_Click">
+                                <FontIcon Glyph="&#xE72C;" FontSize="12" />
+                            </Button>
+                        </Grid>
+                        <StackPanel x:Name="NewsList" Spacing="4" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+        </StackPanel>
+    </ScrollViewer>
+</Page>

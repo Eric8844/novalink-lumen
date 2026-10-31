@@ -1,0 +1,38 @@
+# build output
+bin/
+obj/
+dist/
+out/
+.vs/
+*.user
+*.suo
+
+# runtime data and secrets
+/data/
+*.db
+*.sqlite
+*.sqlite3
+.env
+.env.*
+env.local.ps1
+*.pem
+*.key
+spark.key
+
+# logs and caches
+*.log
+*.tmp
+.cache/
+.edge-profile/
+.asset-tmp/
+.packtest*/
+.testdata*/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# editor
+.vscode/
+.idea/
