@@ -48,7 +48,7 @@
                     <Image x:Name="BrandLogo" Width="46" Height="46" HorizontalAlignment="Center"
                            Source="ms-appx:///Assets/Images/lumen-logo.svg" />
 
-                    <StackPanel Grid.Row="1" Spacing="6" Margin="0,32,0,0">
+                    <StackPanel x:Name="NavItemsPanel" Grid.Row="1" Spacing="6" Margin="0,32,0,0">
                         <Button x:Name="NavHome" AutomationProperties.AutomationId="NavHome" Tag="home" HorizontalAlignment="Center" VerticalAlignment="Center" Style="{StaticResource NavButton}" Click="Nav_Click">
                             <Grid Width="64" Height="64" HorizontalAlignment="Center" VerticalAlignment="Center">
                                 <StackPanel Orientation="Vertical" HorizontalAlignment="Center" VerticalAlignment="Center">
@@ -109,7 +109,9 @@
                                         <Ellipse Width="4" Height="4" Fill="{StaticResource BrushMint}"
                                                  HorizontalAlignment="Center" VerticalAlignment="Center" />
                                     </Grid>
-                                    <TextBlock Text="1.4.0" FontSize="9.5" Foreground="{StaticResource BrushTextTertiary}" />
+                                    <TextBlock x:Name="VersionChipText" Text="1.5.0" FontSize="9.5"
+                                               ToolTipService.ToolTip="正式版 1.5.0"
+                                               Foreground="{StaticResource BrushTextTertiary}" />
                                 </StackPanel>
                             </Border>
                         </Grid>
@@ -121,19 +123,19 @@
                 <!-- 内容一直铺到窗口底边并延伸到顶栏后面，顶栏只靠磨砂控件遮罩，不做整条渐变限位。 -->
                 <Frame x:Name="ContentFrame" Margin="30,0,30,0" Background="Transparent" />
 
-                <Grid Height="68" Margin="30,6,30,0" VerticalAlignment="Top">
-                    <Border x:Name="SearchShell" Width="372" Height="42" HorizontalAlignment="Center" VerticalAlignment="Center"
-                            CornerRadius="15" Background="{StaticResource BrushSearchGlass}" BorderBrush="#40FFFFFF" BorderThickness="1">
+                <!-- 两列布局：搜索框占剩余空间并居中，右侧「游戏状态 / Java / 账号」栈独占一列。
+                     之前两者都靠 HorizontalAlignment 定位，游戏运行时状态条变宽会直接压在搜索框上。 -->
+                <Grid Height="68" Margin="30,6,30,0" VerticalAlignment="Top" ColumnSpacing="14">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Border x:Name="SearchShell" MaxWidth="372" Height="42" HorizontalAlignment="Center" VerticalAlignment="Center"
+                            CornerRadius="15" Background="{StaticResource BrushSearchGlass}" BorderBrush="{StaticResource BrushGlassRim}" BorderThickness="1">
                         <Grid>
-                            <Border Height="1" Margin="18,0,18,0" VerticalAlignment="Top" CornerRadius="1" IsHitTestVisible="False">
-                                <Border.Background>
-                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                                        <GradientStop Color="#00FFFFFF" Offset="0" />
-                                        <GradientStop Color="#3DFFFFFF" Offset="0.42" />
-                                        <GradientStop Color="#00FFFFFF" Offset="1" />
-                                    </LinearGradientBrush>
-                                </Border.Background>
-                            </Border>
+                            <!-- Liquid-glass specular: one hairline of light across the top edge, theme aware. -->
+                            <Border Height="1" Margin="16,0,16,0" VerticalAlignment="Top" CornerRadius="1" IsHitTestVisible="False"
+                                    Background="{StaticResource BrushGlassHighlight}" />
                             <Grid Margin="14,0,13,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto" />
@@ -156,9 +158,9 @@
                         </Grid>
                     </Border>
 
-                    <StackPanel Orientation="Horizontal" Spacing="9" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="9" HorizontalAlignment="Right" VerticalAlignment="Center">
                         <Border x:Name="GameStatusChip" Height="40" Padding="12,0" CornerRadius="13"
-                                Background="#2A0E2A22" BorderBrush="#557CEBD6" BorderThickness="1"
+                                Background="#1F5EE6B5" BorderBrush="#4D5EE6B5" BorderThickness="1"
                                 Visibility="Collapsed" Tapped="GameStatusChip_Tapped">
                             <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                                 <Ellipse Width="7" Height="7" Fill="{StaticResource BrushMint}" />
@@ -170,15 +172,15 @@
                             </StackPanel>
                         </Border>
                         <Button x:Name="GameStopButton" Height="40" Padding="15,0" CornerRadius="13"
-                                Background="#26FF6B6B" BorderBrush="#44FF8A8A" BorderThickness="1"
-                                Foreground="#FFFFC0C0" Visibility="Collapsed" Click="GameStop_Click">
+                                Background="#26E5484D" BorderBrush="#4DE5484D" BorderThickness="1"
+                                Foreground="{StaticResource BrushDanger}" Visibility="Collapsed" Click="GameStop_Click">
                             <StackPanel Orientation="Horizontal" Spacing="7">
                                 <FontIcon Glyph="&#xE71A;" FontSize="12" />
                                 <TextBlock Text="关闭游戏" FontSize="11.5" FontWeight="SemiBold" />
                             </StackPanel>
                         </Button>
                         <Border x:Name="JavaChip" Style="{StaticResource Pill}" Height="40" Padding="13,0"
-                                Background="{StaticResource BrushSearchGlass}" BorderBrush="#2EFFFFFF">
+                                Background="{StaticResource BrushSearchGlass}" BorderBrush="{StaticResource BrushGlassRim}">
                             <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
                                 <FontIcon Glyph="&#xE943;" FontSize="13" Foreground="{StaticResource BrushMint}" />
                                 <TextBlock x:Name="JavaChipText" Text="Java" FontSize="11.5"
@@ -192,7 +194,7 @@
                             <FontIcon Glyph="&#xE7E7;" FontSize="15" />
                         </Button>
                         <Button x:Name="AccountButton" Height="44" Padding="8,0,11,0" CornerRadius="15"
-                                Background="{StaticResource BrushSearchGlass}" BorderBrush="#40FFFFFF" BorderThickness="1"
+                                Background="{StaticResource BrushSearchGlass}" BorderBrush="{StaticResource BrushGlassRim}" BorderThickness="1"
                                 HorizontalContentAlignment="Left" Click="Account_Click">
                             <StackPanel Orientation="Horizontal" Spacing="9" VerticalAlignment="Center">
                                 <Grid Width="29" Height="29">
@@ -217,42 +219,98 @@
             </Grid>
         </Grid>
 
+        <!-- 音乐台：悬停放大并展开详细信息；详情区在控制条上方，展开时按钮位置不变。 -->
         <Border x:Name="MusicDock" Width="352" HorizontalAlignment="Center" VerticalAlignment="Bottom"
                 Margin="86,0,0,22" Padding="10,8" CornerRadius="15"
-                Background="{StaticResource BrushSearchGlass}" BorderBrush="{StaticResource BrushBorderSubtle}"
-                BorderThickness="1" Visibility="Collapsed">
-            <Grid ColumnSpacing="8">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="30" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <Border Width="30" Height="30" CornerRadius="9" Background="{StaticResource BrushAccentSoft}">
-                    <FontIcon Glyph="&#xE8D6;" FontSize="13" Foreground="{StaticResource BrushMint}" />
-                </Border>
-                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="0">
-                    <TextBlock x:Name="MusicTitle" Text="未选择音乐" FontSize="11.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                    <TextBlock x:Name="MusicSubtitle" Text="在设置中导入音乐" FontSize="9" Foreground="{StaticResource BrushTextTertiary}" TextTrimming="CharacterEllipsis" />
+                Background="{StaticResource BrushSearchGlass}" BorderBrush="{StaticResource BrushGlassRim}"
+                BorderThickness="1" Visibility="Collapsed" RenderTransformOrigin="0.5,1"
+                PointerEntered="MusicDock_PointerEntered" PointerExited="MusicDock_PointerExited"
+                Tapped="MusicDock_Tapped">
+            <Border.RenderTransform>
+                <ScaleTransform x:Name="MusicDockScale" ScaleX="1" ScaleY="1" />
+            </Border.RenderTransform>
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <Border Grid.RowSpan="2" Height="1" Margin="4,0,4,0" VerticalAlignment="Top" CornerRadius="1"
+                        IsHitTestVisible="False" Background="{StaticResource BrushGlassHighlight}" />
+                <StackPanel x:Name="MusicDetail" Grid.Row="0" Margin="2,0,2,8" Spacing="6"
+                            Visibility="Collapsed" Opacity="0" IsHitTestVisible="False">
+                    <StackPanel.RenderTransform>
+                        <TranslateTransform x:Name="MusicDetailShift" Y="8" />
+                    </StackPanel.RenderTransform>
+                    <!-- 进度：可拖动定位（原来只是 ProgressBar，完全不可交互）。 -->
+                    <Slider x:Name="MusicProgress" AutomationProperties.AutomationId="MusicProgress"
+                            AutomationProperties.Name="播放进度" Style="{StaticResource MusicSlider}"
+                            Minimum="0" Maximum="1" Value="0" StepFrequency="0.01"
+                            AutomationProperties.HelpText="拖动调整播放进度"
+                            ValueChanged="MusicProgress_ValueChanged" />
+                    <Grid ColumnSpacing="10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="MusicTimeText" AutomationProperties.AutomationId="MusicTimeText"
+                                   Text="00:00 / 00:00" FontSize="9.5" VerticalAlignment="Center"
+                                   Foreground="{StaticResource BrushTextSecondary}" />
+                        <TextBlock x:Name="MusicMetaText" Grid.Column="1" AutomationProperties.AutomationId="MusicMetaText"
+                                   Text="暂无曲目" FontSize="9.5" VerticalAlignment="Center"
+                                   HorizontalAlignment="Right" TextTrimming="CharacterEllipsis"
+                                   Foreground="{StaticResource BrushTextTertiary}" />
+                    </Grid>
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <FontIcon Glyph="&#xE767;" FontSize="11" VerticalAlignment="Center"
+                                  Foreground="{StaticResource BrushTextTertiary}" />
+                        <Slider x:Name="MusicVolume" Grid.Column="1" AutomationProperties.AutomationId="MusicVolume"
+                                AutomationProperties.Name="音量" Style="{StaticResource MusicSlider}"
+                                Minimum="0" Maximum="1" Value="1" StepFrequency="0.01"
+                                AutomationProperties.HelpText="拖动调整音量"
+                                ValueChanged="MusicVolume_ValueChanged" />
+                        <TextBlock x:Name="MusicVolumeText" Grid.Column="2" AutomationProperties.AutomationId="MusicVolumeText"
+                                   Text="100%" FontSize="9.5" MinWidth="32" TextAlignment="Right" VerticalAlignment="Center"
+                                   Foreground="{StaticResource BrushTextSecondary}" />
+                    </Grid>
                 </StackPanel>
-                <Button x:Name="MusicModeButton" Grid.Column="2" Width="28" Height="28" Padding="0" CornerRadius="8"
-                        Style="{StaticResource GhostButton}" Click="MusicMode_Click" ToolTipService.ToolTip="播放方式">
-                    <FontIcon x:Name="MusicModeIcon" Glyph="&#xE8EE;" FontSize="12" />
-                </Button>
-                <Button Grid.Column="3" Width="28" Height="28" Padding="0" CornerRadius="8"
-                        Style="{StaticResource GhostButton}" Click="MusicPrevious_Click" ToolTipService.ToolTip="上一首">
-                    <FontIcon Glyph="&#xE892;" FontSize="12" />
-                </Button>
-                <Button Grid.Column="4" Width="30" Height="30" Padding="0" CornerRadius="9"
-                        Style="{StaticResource AccentButton}" Click="MusicToggle_Click" ToolTipService.ToolTip="播放 / 暂停">
-                    <FontIcon x:Name="MusicPlayIcon" Glyph="&#xE768;" FontSize="12" />
-                </Button>
-                <Button Grid.Column="5" Width="28" Height="28" Padding="0" CornerRadius="8"
-                        Style="{StaticResource GhostButton}" Click="MusicNext_Click" ToolTipService.ToolTip="下一首">
-                    <FontIcon Glyph="&#xE893;" FontSize="12" />
-                </Button>
+                <Grid Grid.Row="1" ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="30" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Border Width="30" Height="30" CornerRadius="9" Background="{StaticResource BrushAccentSoft}">
+                        <FontIcon Glyph="&#xE8D6;" FontSize="13" Foreground="{StaticResource BrushMint}" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="0">
+                        <TextBlock x:Name="MusicTitle" Text="未选择音乐" FontSize="11.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                        <TextBlock x:Name="MusicSubtitle" Text="在设置中导入音乐" FontSize="9" Foreground="{StaticResource BrushTextTertiary}" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                    <Button x:Name="MusicModeButton" Grid.Column="2" Width="28" Height="28" Padding="0" CornerRadius="8"
+                            Style="{StaticResource GhostButton}" Click="MusicMode_Click" ToolTipService.ToolTip="播放方式">
+                        <FontIcon x:Name="MusicModeIcon" Glyph="&#xE8EE;" FontSize="12" />
+                    </Button>
+                    <Button Grid.Column="3" Width="28" Height="28" Padding="0" CornerRadius="8"
+                            Style="{StaticResource GhostButton}" Click="MusicPrevious_Click" ToolTipService.ToolTip="上一首">
+                        <FontIcon Glyph="&#xE892;" FontSize="12" />
+                    </Button>
+                    <Button Grid.Column="4" Width="30" Height="30" Padding="0" CornerRadius="9"
+                            Style="{StaticResource AccentButton}" Click="MusicToggle_Click" ToolTipService.ToolTip="播放 / 暂停">
+                        <FontIcon x:Name="MusicPlayIcon" Glyph="&#xE768;" FontSize="12" />
+                    </Button>
+                    <Button Grid.Column="5" Width="28" Height="28" Padding="0" CornerRadius="8"
+                            Style="{StaticResource GhostButton}" Click="MusicNext_Click" ToolTipService.ToolTip="下一首">
+                        <FontIcon Glyph="&#xE893;" FontSize="12" />
+                    </Button>
+                </Grid>
             </Grid>
         </Border>
 
@@ -346,5 +404,22 @@
                 </StackPanel>
             </Border>
         </Grid>
+
+        <!-- 插件通知气泡：右下角短暂浮出，点击铃铛可回看最近的通知。 -->
+        <Border x:Name="PluginToast" MaxWidth="392" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                Margin="0,0,34,104" Padding="16,13" CornerRadius="16" Visibility="Collapsed" Opacity="0"
+                Background="{StaticResource BrushSearchGlass}" BorderBrush="{StaticResource BrushBorderSubtle}"
+                BorderThickness="1" IsHitTestVisible="False">
+            <StackPanel Orientation="Horizontal" Spacing="12">
+                <FontIcon x:Name="PluginToastIcon" Glyph="&#xE7E7;" FontSize="16" VerticalAlignment="Top"
+                          Margin="0,2,0,0" Foreground="{StaticResource BrushMint}" />
+                <StackPanel Spacing="3" MaxWidth="318">
+                    <TextBlock x:Name="PluginToastTitle" FontSize="12.5" FontWeight="SemiBold"
+                               Foreground="{StaticResource BrushText}" TextWrapping="Wrap" />
+                    <TextBlock x:Name="PluginToastBody" FontSize="11.5" Foreground="{StaticResource BrushTextSecondary}"
+                               TextWrapping="Wrap" MaxLines="3" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
     </Grid>
 </Page>

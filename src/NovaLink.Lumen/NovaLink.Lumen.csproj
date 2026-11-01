@@ -21,19 +21,49 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>preview</LangVersion>
-    <ApplicationVersion>1.4.0.0</ApplicationVersion>
-    <Version>1.4.0</Version>
+    <!-- CsWinRT 2.3.x：DynamicXaml.WinUI 的投影程序集编译在 WinRT.Runtime 2.3.0 之上，
+         而 SDK 默认给 2.2.0，会报 CS1705。10.0.26100.87 带 WinRT.Runtime 2.3.1.0。 -->
+    <WindowsSdkPackageVersion>10.0.26100.87</WindowsSdkPackageVersion>
+    <!-- 发布通道：Stable（默认，正式版）/ Preview（测试版）。
+         默认就是正式版：直接 dotnet build / dotnet publish 编出来的就是正式版。
+         测试版构建显式传 -p:NovaLinkChannel=Preview（scripts\build.ps1 -Channel Preview）。
+         只有 Preview 才加 NOVALINK_PREVIEW 常量，客户端据此决定查哪个仓库、显示「测试版」徽章。 -->
+    <NovaLinkChannel Condition="'$(NovaLinkChannel)' == ''">Stable</NovaLinkChannel>
+    <DefineConstants Condition="'$(NovaLinkChannel)' == 'Preview'">$(DefineConstants);NOVALINK_PREVIEW</DefineConstants>
+    <!-- 程序集版本与文件版本必须是纯数字（NSIS 与 Windows 属性页都只认 4 段），
+         通道信息走 InformationalVersion，不污染 AssemblyVersion。 -->
+    <AssemblyVersion>1.5.0.0</AssemblyVersion>
+    <FileVersion>1.5.0.0</FileVersion>
+    <ApplicationVersion>1.5.0.0</ApplicationVersion>
+    <Version>1.5.0</Version>
+    <InformationalVersion>1.5.0</InformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.6.4" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.9457" />
     <PackageReference Include="Microsoft.Graphics.Win2D" Version="1.4.0" />
+    <!-- 运行时加载插件自带的 .pri（插件编译型 XAML，T1）。它的 build targets 里 winmd 路径写错，
+         所以不能依赖自动接线：这里用 PackageReference 只取投影 DLL 与原生组件，见第三部分手工引用。 -->
+    <PackageReference Include="DynamicXaml.WinUI" Version="1.0.2" ExcludeAssets="build;buildTransitive" GeneratePathProperty="true" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\NovaLink.Lumen.Core\NovaLink.Lumen.Core.csproj" />
     <ProjectReference Include="..\NovaLink.Lumen.Services\NovaLink.Lumen.Services.csproj" />
+  </ItemGroup>
+
+  <!-- DynamicXaml.WinUI 1.0.2：包里的 build targets 引用不存在的 Microsoft.VCLibs.Desktop SDK，
+       故排除 build 资产、手工接线。原生组件必须与 exe 同目录（CsWinRT 按文件名激活）。 -->
+  <ItemGroup>
+    <Reference Include="DynamicXaml.WinUI.Projection">
+      <HintPath>$(PkgDynamicXaml_WinUI)\lib\net8.0-windows10.0.19041.0\DynamicXaml.WinUI.Projection.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Content Include="$(PkgDynamicXaml_WinUI)\runtimes\win-x64\native\DynamicXaml.WinUI.dll"
+             Link="DynamicXaml.WinUI.dll"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

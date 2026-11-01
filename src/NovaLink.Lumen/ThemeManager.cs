@@ -54,6 +54,29 @@ public static class ThemeManager
         if (changed) Changed?.Invoke(null, EventArgs.Empty);
     }
 
+    /// <summary>
+    /// Returns the live theme brush for a resource key (so code-built dialogs follow light/dark
+    /// switches without caching a frozen color), falling back to a solid brush of <paramref name="fallback"/>.
+    /// </summary>
+    public static Brush Brush(string key, Color fallback)
+    {
+        try
+        {
+            if (Application.Current?.Resources is { } r && TryFind(r, key, out var value) && value is Brush brush)
+                return brush;
+        }
+        catch { }
+        return new SolidColorBrush(fallback);
+    }
+
+    public static Brush BrushText => Brush("BrushText", Text);
+    public static Brush BrushTextSecondary => Brush("BrushTextSecondary", TextSecondary);
+    public static Brush BrushTextTertiary => Brush("BrushTextTertiary", TextTertiary);
+    public static Brush BrushAccent => Brush("BrushMint", Accent);
+    public static Brush BrushDanger => Brush("BrushDanger", IsLight ? Color.FromArgb(0xFF, 0xD1, 0x3F, 0x62) : Color.FromArgb(0xFF, 0xFF, 0x6B, 0x8A));
+    public static Brush BrushCardBorder => Brush("BrushBorderSubtle", ControlBorder);
+    public static Brush BrushGlassCard => Brush("BrushGlassCard", CardSurface);
+
     public static Color DefaultAccent(bool light) => light
         ? Color.FromArgb(0xFF, 0x0C, 0x94, 0x80)
         : Color.FromArgb(0xFF, 0x7C, 0xEB, 0xD6);
@@ -109,6 +132,11 @@ public static class ThemeManager
         SetSolid(r, "BrushFillSubtle", IsLight ? Color.FromArgb(0x0F, 0x12, 0x22, 0x32) : Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF));
         SetSolid(r, "BrushFillSoft", IsLight ? Color.FromArgb(0x0A, 0x12, 0x22, 0x32) : Color.FromArgb(0x10, 0xFF, 0xFF, 0xFF));
         SetSolid(r, "BrushBorderSubtle", IsLight ? Color.FromArgb(0x1E, 0x15, 0x25, 0x36) : Color.FromArgb(0x1E, 0xFF, 0xFF, 0xFF));
+        SetSolid(r, "BrushSliderTrack", IsLight ? Color.FromArgb(0x2E, 0x0E, 0x22, 0x33) : Color.FromArgb(0x26, 0xFF, 0xFF, 0xFF));
+        // Amber used for "restart required" style notices is unreadable on a light surface, so the
+        // token darkens in light mode instead of staying the dark-theme #FFC078.
+        SetSolid(r, "BrushWarn", IsLight ? Color.FromArgb(0xFF, 0xB0, 0x6A, 0x00) : Color.FromArgb(0xFF, 0xFF, 0xC0, 0x78));
+        SetSolid(r, "BrushWarnSoft", IsLight ? Color.FromArgb(0x26, 0xFF, 0xB8, 0x6B) : Color.FromArgb(0x33, 0xFF, 0xB8, 0x6B));
         SetSolid(r, "BrushField", IsLight ? Color.FromArgb(0xCC, 0xFF, 0xFF, 0xFF) : Color.FromArgb(0x0E, 0xFF, 0xFF, 0xFF));
         SetSolid(r, "BrushFieldBorder", IsLight ? Color.FromArgb(0x26, 0x15, 0x25, 0x36) : Color.FromArgb(0x1F, 0xFF, 0xFF, 0xFF));
         SetSolid(r, "BrushHover", IsLight ? Color.FromArgb(0x10, 0x0E, 0x22, 0x33) : Color.FromArgb(0x18, 0xFF, 0xFF, 0xFF));
@@ -143,6 +171,22 @@ public static class ThemeManager
         SetSolid(r, "BrushNavSelectedBorder", WithAlpha(accent, IsLight ? (byte)0x52 : (byte)0x4D));
         SetSolid(r, "BrushNavHover", IsLight ? Color.FromArgb(0x10, 0x0E, 0x22, 0x33) : Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF));
 
+        // Control theme resources live in the merged theme dictionary and are resolved when a
+        // popup presenter is created. They used to point at the static {StaticResource ColorText},
+        // which is frozen at the dark-mode value, so every menu/combo popup kept white text on a
+        // white light-mode surface (invisible items). Keep them in sync with the active theme.
+        SetSolid(r, "MenuFlyoutItemForeground", Text);
+        SetSolid(r, "MenuFlyoutItemForegroundPointerOver", Text);
+        SetSolid(r, "ComboBoxForeground", Text);
+        SetSolid(r, "ComboBoxForegroundPointerOver", Text);
+        SetSolid(r, "ComboBoxDropDownForeground", Text);
+        SetSolid(r, "ComboBoxItemForegroundSelected", Text);
+        SetSolid(r, "ComboBoxItemPillFillBrush", accent);
+        SetColorKey(r, "ColorText", Text);
+        SetColorKey(r, "ColorTextSecondary", TextSecondary);
+        SetColorKey(r, "ColorTextTertiary", TextTertiary);
+        SetColorKey(r, "ColorMint", accent);
+
         SetSolid(r, "MenuFlyoutPresenterBorderBrush", IsLight ? Color.FromArgb(0x26, 0x15, 0x25, 0x36) : Color.FromArgb(0x2E, 0xFF, 0xFF, 0xFF));
         SetSolid(r, "MenuFlyoutItemBackgroundPointerOver", IsLight ? Color.FromArgb(0x10, 0x0E, 0x22, 0x33) : Color.FromArgb(0x18, 0xFF, 0xFF, 0xFF));
         SetSolid(r, "MenuFlyoutItemBackgroundPressed", IsLight ? Color.FromArgb(0x1C, 0x0E, 0x22, 0x33) : Color.FromArgb(0x24, 0xFF, 0xFF, 0xFF));
@@ -156,9 +200,18 @@ public static class ThemeManager
         SetSolid(r, "ComboBoxItemBackgroundSelected", WithAlpha(accent, IsLight ? (byte)0x2A : (byte)0x2E));
         SetSolid(r, "ComboBoxItemBackgroundSelectedPointerOver", WithAlpha(accent, IsLight ? (byte)0x38 : (byte)0x3A));
 
+        SetGradient(r, "BrushGlassHighlight", IsLight
+            ? new[] { Color.FromArgb(0x66, 0xFF, 0xFF, 0xFF), Color.FromArgb(0x1F, 0xFF, 0xFF, 0xFF), Color.FromArgb(0x00, 0xFF, 0xFF, 0xFF) }
+            : new[] { Color.FromArgb(0x3D, 0xFF, 0xFF, 0xFF), Color.FromArgb(0x12, 0xFF, 0xFF, 0xFF), Color.FromArgb(0x00, 0xFF, 0xFF, 0xFF) });
+
         SetAcrylic(r, "BrushSearchGlass", IsLight ? Color.FromArgb(0xFF, 0xF7, 0xFA, 0xFD) : Color.FromArgb(0xFF, 0x0A, 0x11, 0x1D), IsLight ? 0.76 : 0.58);
-        SetAcrylic(r, "ComboBoxDropDownBackground", IsLight ? Color.FromArgb(0xFF, 0xF7, 0xFA, 0xFD) : Color.FromArgb(0xFF, 0x0A, 0x11, 0x1E), IsLight ? 0.96 : 0.72);
-        SetAcrylic(r, "MenuFlyoutPresenterBackground", IsLight ? Color.FromArgb(0xFF, 0xF7, 0xFA, 0xFD) : Color.FromArgb(0xFF, 0x0A, 0x11, 0x1E), IsLight ? 0.96 : 0.80);
+        // Slightly more transparent in light mode so the frosted blur still reads as glass
+        // instead of a flat white panel.
+        SetAcrylic(r, "BrushGlassLiquid", IsLight ? Color.FromArgb(0xFF, 0xF4, 0xF8, 0xFC) : Color.FromArgb(0xFF, 0x0A, 0x11, 0x1E), IsLight ? 0.82 : 0.62);
+        // Light mode used to sit at 0.88-0.90 opacity, which rendered menus as flat opaque white
+        // sheets. Dropping it lets the frosted blur read through without hurting legibility.
+        SetAcrylic(r, "ComboBoxDropDownBackground", IsLight ? Color.FromArgb(0xFF, 0xF7, 0xFA, 0xFD) : Color.FromArgb(0xFF, 0x0A, 0x11, 0x1E), IsLight ? 0.78 : 0.72);
+        SetAcrylic(r, "MenuFlyoutPresenterBackground", IsLight ? Color.FromArgb(0xFF, 0xF7, 0xFA, 0xFD) : Color.FromArgb(0xFF, 0x0A, 0x11, 0x1E), IsLight ? 0.74 : 0.80);
     }
 
     private static bool TryFind(ResourceDictionary root, string key, out object? value)
@@ -235,6 +288,15 @@ public static class ThemeManager
         else if (t < 2.0 / 3.0) value = p + (q - p) * (2.0 / 3.0 - t) * 6;
         else value = p;
         return (byte)Math.Round(Math.Clamp(value, 0.0, 1.0) * 255);
+    }
+
+    /// <summary>
+    /// Updates a raw <c>Color</c> resource. Brushes created from it are frozen copies, so every
+    /// brush that derives from a color key must also be refreshed explicitly (see ApplyResources).
+    /// </summary>
+    private static void SetColorKey(ResourceDictionary r, string key, Color color)
+    {
+        if (TryFind(r, key, out var value) && value is Color) r[key] = color;
     }
 
     private static void SetSolid(ResourceDictionary r, string key, Color color)

@@ -3,6 +3,7 @@ using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Media.Imaging;
 using NovaLink.Lumen.Controls;
 using NovaLink.Lumen.Core.Models;
@@ -16,16 +17,49 @@ namespace NovaLink.Lumen.Views.Pages;
 
 public sealed partial class VersionsPage : Page
 {
+    private const int RenderBatchSize = 6;
+
     private IReadOnlyList<InstanceSummary> _instances = [];
     private InstanceSummary? _selected;
     private string? _pendingFocus;
     private bool _loading;
+    private LoadingState? _busy;
+    private int _renderToken;
 
     public VersionsPage()
     {
         InitializeComponent();
-        Loaded += async (_, _) => await ReloadAsync();
+        EnsureBusy().Hide();
+        Loaded += OnPageLoaded;
+        Unloaded += OnPageUnloaded;
     }
+
+    private async void OnPageLoaded(object sender, RoutedEventArgs e) => await ReloadAsync();
+
+    private void OnPageUnloaded(object sender, RoutedEventArgs e)
+    {
+        // 页面离开：作废进行中的渲染，并把加载动画从视觉树上摘掉，避免它在后台一直跑。
+        _renderToken++;
+        _loading = false;
+        _busy?.Detach();
+        _busy = null;
+    }
+
+    private LoadingState EnsureBusy()
+    {
+        if (_busy is null || _busy.Parent is null)
+            _busy = LoadingState.Attach(PageRoot, "正在读取实例…");
+        return _busy;
+    }
+
+    private void ShowBusy(string message)
+    {
+        var busy = EnsureBusy();
+        busy.SetMessage(message);
+        busy.Show();
+    }
+
+    private void HideBusy() => _busy?.Hide();
 
     public async void Reload() => await ReloadAsync();
 
@@ -40,10 +74,18 @@ public sealed partial class VersionsPage : Page
     {
         if (_loading) return;
         _loading = true;
+        var token = ++_renderToken;
+        ShowBusy("正在读取实例…");
         try
         {
+            // 先把加载动画画上一帧，再让后台线程去扫盘，避免进页面就卡住。
+            await UiYield.NextFrameAsync();
             var previous = _selected?.Id;
-            _instances = await LumenRuntime.Instances.ScanAsync();
+            var scanned = await Task.Run(async () => await LumenRuntime.Instances.ScanAsync());
+            if (token != _renderToken) return;
+            _instances = scanned;
+            var iconFlags = await ResolveIconAvailabilityAsync();
+            if (token != _renderToken) return;
             CountText.Text = _instances.Count.ToString();
             var focus = _pendingFocus;
             var active = LumenRuntime.Settings.Settings.SelectedInstanceId;
@@ -51,7 +93,8 @@ public sealed partial class VersionsPage : Page
                 ?? _instances.FirstOrDefault(x => x.Id == active)
                 ?? _instances.FirstOrDefault(x => x.Id == previous) ?? _instances.FirstOrDefault();
             if (focus is not null) _pendingFocus = null;
-            RenderList(target);
+            await RenderListAsync(target, iconFlags, token);
+            if (token != _renderToken) return;
             Select(target);
             UpdatePlayState(LumenRuntime.Launch.State);
             EmptyCard.Visibility = _instances.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -61,26 +104,131 @@ public sealed partial class VersionsPage : Page
         {
             AppLog.Error("versions", "扫描版本失败", ex);
         }
-        finally { _loading = false; }
+        finally
+        {
+            if (token == _renderToken)
+            {
+                _loading = false;
+                HideBusy();
+            }
+        }
     }
 
-    private void RenderList(InstanceSummary? target)
+    /// <summary>图标是否存在是文件 IO，先丢到后台线程判断。</summary>
+    private async Task<bool[]> ResolveIconAvailabilityAsync()
+    {
+        var items = _instances;
+        return await Task.Run(() =>
+        {
+            var flags = new bool[items.Count];
+            for (var i = 0; i < items.Count; i++)
+            {
+                try
+                {
+                    flags[i] = !items[i].Icon.StartsWith("loader:", StringComparison.OrdinalIgnoreCase)
+                        && File.Exists(items[i].Icon);
+                }
+                catch
+                {
+                    flags[i] = false;
+                }
+            }
+            return flags;
+        });
+    }
+
+    private async Task RenderListAsync(InstanceSummary? target, bool[] iconFlags, int token)
     {
         VersionList.Children.Clear();
-        foreach (var item in _instances)
-            VersionList.Children.Add(BuildRow(item, item.Id == target?.Id));
+        // 内容开始上屏就收起加载层，避免转圈和已渲染的行叠在一起。
+        HideBusy();
+        for (var index = 0; index < _instances.Count; index++)
+        {
+            // 分批上屏，每批之间让出一帧，背景动画就不会停住。
+            if (token != _renderToken) return;
+            var item = _instances[index];
+            var row = BuildRow(item, item.Id == target?.Id, iconFlags[index]);
+            VersionList.Children.Add(row);
+            Motion.RowIn(row, index % RenderBatchSize);
+            if ((index + 1) % RenderBatchSize == 0) await UiYield.NextFrameAsync();
+        }
     }
 
-    private Border BuildRow(InstanceSummary item, bool selected)
+    private static void ApplyRowSelection(Border row, bool selected, bool animate = false)
+    {
+        // 选中/未选中都取当前主题的实色：浅色下才有边界感，深色下也不会发白。
+        FadeBrush(row, true,
+            selected ? ThemeColor("BrushSelected", Alpha(ThemeManager.Accent, 0x2E))
+                     : ThemeColor("BrushFillSubtle", Alpha(ThemeManager.Text, 0x0A)), animate);
+        FadeBrush(row, false,
+            selected ? ThemeColor("BrushNavSelectedBorder", Alpha(ThemeManager.Accent, 0x66))
+                     : ThemeColor("BrushBorderSubtle", Alpha(ThemeManager.Text, 0x14)), animate);
+    }
+
+    /// <summary>换成目标色；animate 时从上一色渐变过去（Motion.HoverInMs），失败就直接落地。</summary>
+    private static void FadeBrush(Border row, bool background, Color target, bool animate)
+    {
+        var previous = background
+            ? (row.Background as SolidColorBrush)?.Color
+            : (row.BorderBrush as SolidColorBrush)?.Color;
+        var brush = new SolidColorBrush(target);
+        if (background) row.Background = brush;
+        else row.BorderBrush = brush;
+        if (!animate || previous is null || previous.Value == target) return;
+        try
+        {
+            var animation = new ColorAnimation
+            {
+                From = previous.Value,
+                To = target,
+                Duration = new Duration(TimeSpan.FromMilliseconds(Motion.HoverInMs)),
+                FillBehavior = FillBehavior.Stop,
+                EnableDependentAnimation = true,
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+            };
+            Storyboard.SetTarget(animation, brush);
+            Storyboard.SetTargetProperty(animation, "Color");
+            var storyboard = new Storyboard();
+            storyboard.Children.Add(animation);
+            storyboard.Begin();
+        }
+        catch (Exception)
+        {
+            // 过渡只是附加效果，出错保留目标色。
+        }
+    }
+
+    private static Color ThemeColor(string key, Color fallback)
+    {
+        return Application.Current.Resources.TryGetValue(key, out var value) && value is SolidColorBrush brush
+            ? brush.Color
+            : fallback;
+    }
+
+    private static Color Alpha(Color color, byte alpha) => Color.FromArgb(alpha, color.R, color.G, color.B);
+
+    /// <summary>切换选中态时只改行高亮，不重建列表（否则每次点击都会重排整份列表）。</summary>
+    private void UpdateSelection()
+    {
+        foreach (var child in VersionList.Children)
+        {
+            if (child is not Border row) continue;
+            var selected = _selected is not null
+                && row.Tag is string id
+                && string.Equals(id, _selected.Id, StringComparison.OrdinalIgnoreCase);
+            ApplyRowSelection(row, selected, animate: true);
+        }
+    }
+
+    private Border BuildRow(InstanceSummary item, bool selected, bool hasIcon)
     {
         var row = new Border
         {
             CornerRadius = new CornerRadius(16),
             Padding = new Thickness(12, 11, 12, 11),
-            Background = new SolidColorBrush(selected ? Color.FromArgb(0x2E, 0x7C, 0xEB, 0xD6) : Color.FromArgb(0x0C, 0xFF, 0xFF, 0xFF)),
-            BorderBrush = new SolidColorBrush(selected ? Color.FromArgb(0x66, 0x7C, 0xEB, 0xD6) : Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF)),
             BorderThickness = new Thickness(1)
         };
+        ApplyRowSelection(row, selected);
         var grid = new Grid { ColumnSpacing = 11 };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(44) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -89,11 +237,11 @@ public sealed partial class VersionsPage : Page
         var iconHost = new Border
         {
             Width = 44, Height = 44, CornerRadius = new CornerRadius(13),
-            Background = new SolidColorBrush(Color.FromArgb(0x26, 0x61, 0xC8, 0xFF)),
-            BorderBrush = new SolidColorBrush(Color.FromArgb(0x24, 0xFF, 0xFF, 0xFF)),
+            Background = ThemeManager.Brush("BrushAccentSoft", Alpha(ThemeManager.Accent, 0x26)),
+            BorderBrush = ThemeManager.Brush("BrushBorderSubtle", Alpha(ThemeManager.Text, 0x24)),
             BorderThickness = new Thickness(1)
         };
-        if (!item.Icon.StartsWith("loader:", StringComparison.OrdinalIgnoreCase) && File.Exists(item.Icon))
+        if (hasIcon)
         {
             iconHost.Background = new ImageBrush { ImageSource = new BitmapImage(new Uri(item.Icon)), Stretch = Stretch.UniformToFill };
         }
@@ -103,7 +251,7 @@ public sealed partial class VersionsPage : Page
             {
                 Text = LoaderMark(item.Loader), FontSize = 15, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
                 HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
-                Foreground = new SolidColorBrush(Color.FromArgb(0xDD, 0xDC, 0xEB, 0xFF))
+                Foreground = ThemeManager.Brush("BrushText", ThemeManager.Text)
             };
         }
         Grid.SetColumn(iconHost, 0);
@@ -141,6 +289,7 @@ public sealed partial class VersionsPage : Page
         row.Child = grid;
         row.Tag = item.Id;
         row.Tapped += (_, _) => Select(item);
+        Motion.Hover(row, 1.004f, 1.2f);
         return row;
     }
 
@@ -156,7 +305,7 @@ public sealed partial class VersionsPage : Page
                 LumenRuntime.Settings.Save();
             }
         }
-        RenderList(item);
+        UpdateSelection();
         if (item is null)
         {
             EmptyCard.Visibility = Visibility.Visible;

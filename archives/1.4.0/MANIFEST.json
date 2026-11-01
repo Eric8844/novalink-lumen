@@ -1,0 +1,29 @@
+{
+    "schema":  1,
+    "version":  "1.4.0",
+    "archivedAtUtc":  "2026-11-01T01:03:55Z",
+    "gitTag":  "v1.4.0-archive",
+    "gitCommit":  "031a2f671b1171e5343a2752afed6407a8ebf47b",
+    "installer":  {
+                      "name":  "NovaLinkLumen-Setup.exe",
+                      "bytes":  67872530,
+                      "sha256":  "70A0EC7F72EB5CB7E6A07C9AF85C5F55210C895C8409D989020AC6AE6E4A22BB"
+                  },
+    "sourceArchive":  {
+                          "name":  "source-1.4.0.tar.gz",
+                          "sha256":  "A71D68CBD28A779A97E444F56F79ABAE41B2D00A5464F58C6D084F65CC562680"
+                      },
+    "releaseTree":  {
+                        "files":  541,
+                        "totalBytes":  247944238,
+                        "fingerprintSha256":  "8A2DCB4257FB224C4BE49BB36CA635E6904D6B78B5D178583DE48377827A3413"
+                    },
+    "buildHost":  {
+                      "dotnetSdk":  "10.0.403",
+                      "rid":  "win-x64",
+                      "nsis":  "unknown",
+                      "platform":  "x64"
+                  },
+    "githubRelease":  "https://github.com/Eric8844/novalink-lumen-releases/releases/tag/v1.4.0",
+    "notes":  "由 scripts/archive-release.ps1 生成；本文件存在即表示归档完成"
+}

@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using NovaLink.Lumen.Core;
 using NovaLink.Lumen.Core.Models;
+using NovaLink.Lumen.Core.Plugins;
 using NovaLink.Lumen.Services.NovaLink;
 using NovaLink.Lumen.Services.Storage;
 
@@ -86,17 +87,31 @@ public sealed class AccountService
              string.Equals(a.Uuid, account.Microsoft!.Uuid, StringComparison.OrdinalIgnoreCase)));
     }
 
+    // 下面四个方法会取出明文令牌。插件一律拒绝（见 PluginTrustBoundary），
+    // 宿主内部（登录、绑定、启动游戏、论坛）走的是受信任调用路径。
     public string NovalinkTokenFor(AccountRecord account)
-        => _secret.Unprotect(account.NovalinkToken);
+    {
+        PluginTrustBoundary.EnsureTrustedCaller(typeof(AccountService).Assembly, "读取 NovaLink 账户令牌");
+        return _secret.Unprotect(account.NovalinkToken);
+    }
 
     public string MicrosoftTokenFor(AccountRecord account)
-        => _secret.Unprotect(account.AccessToken);
+    {
+        PluginTrustBoundary.EnsureTrustedCaller(typeof(AccountService).Assembly, "读取 Microsoft 账户令牌");
+        return _secret.Unprotect(account.AccessToken);
+    }
 
     public string ForumTokenFor(AccountRecord account)
-        => _secret.Unprotect(account.ForumToken);
+    {
+        PluginTrustBoundary.EnsureTrustedCaller(typeof(AccountService).Assembly, "读取论坛令牌");
+        return _secret.Unprotect(account.ForumToken);
+    }
 
     public string MicrosoftRefreshTokenFor(AccountRecord account)
-        => _secret.Unprotect(account.RefreshToken);
+    {
+        PluginTrustBoundary.EnsureTrustedCaller(typeof(AccountService).Assembly, "读取 Microsoft 刷新令牌");
+        return _secret.Unprotect(account.RefreshToken);
+    }
 
     public AccountPublic UpsertMicrosoft(string name, string uuid, string minecraftToken, string refreshToken, long expiresAt, string skinUrl)
     {

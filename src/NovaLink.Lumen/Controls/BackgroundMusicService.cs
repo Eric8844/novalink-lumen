@@ -46,6 +46,9 @@ public sealed class BackgroundMusicService : IDisposable
     private int _channels = 2;
     private int _index = -1;
     private string _mode = "list";
+    // 自己记住音量：MediaPlayer.Volume 在音源还没挂上时读回来可能是 0，
+    // 直接用 getter 回显会把界面滑块打成 0%，还会把 0 写回设置。
+    private double _volume = 1;
 
     private AudioGraph? _graph;
     private AudioDeviceOutputNode? _deviceOutput;
@@ -80,9 +83,51 @@ public sealed class BackgroundMusicService : IDisposable
     public string CurrentTitle => CurrentPath is null ? "未选择音乐" : Path.GetFileNameWithoutExtension(CurrentPath);
     public double Volume
     {
-        get => _player.Volume;
-        set => _player.Volume = Math.Clamp(value, 0, 1);
+        get => _volume;
+        set
+        {
+            _volume = Math.Clamp(value, 0, 1);
+            try { _player.Volume = _volume; } catch { }
+        }
     }
+
+    /// <summary>当前播放位置；没有加载曲目时为 0。</summary>
+    public TimeSpan Position
+    {
+        get { try { return _player.PlaybackSession.Position; } catch { return TimeSpan.Zero; } }
+    }
+
+    /// <summary>当前曲目总时长；媒体还没解析出时长时为 0。</summary>
+    public TimeSpan Duration
+    {
+        get { try { return _player.PlaybackSession.NaturalDuration; } catch { return TimeSpan.Zero; } }
+    }
+
+    /// <summary>跳转到指定播放位置；媒体还没解析出时长或位置不合法时安全忽略。</summary>
+    public void Seek(TimeSpan position)
+    {
+        try
+        {
+            var session = _player.PlaybackSession;
+            if (session is null) return;
+            var duration = session.NaturalDuration;
+            var target = position;
+            if (target < TimeSpan.Zero) target = TimeSpan.Zero;
+            if (duration > TimeSpan.Zero && target > duration) target = duration;
+            session.Position = target;
+            Notify();
+        }
+        catch (Exception)
+        {
+            // 曲目还没准备好时 Seek 会抛，直接忽略即可。
+        }
+    }
+
+    /// <summary>当前曲目在播放列表里的序号（从 0 开始）；没有选中曲目时为 -1。</summary>
+    public int TrackIndex => _index;
+
+    /// <summary>播放列表里的曲目总数。</summary>
+    public int TrackCount => _tracks.Count;
 
     public void Configure(IEnumerable<string> tracks, string mode, double volume)
     {

@@ -19,10 +19,28 @@ namespace NovaLink.Lumen.Controls;
 /// </summary>
 public static class Motion
 {
+    // One motion vocabulary for the whole shell. Anything that animates should pick a duration
+    // from here instead of inventing 190/240/320/520-style one-offs, so hover, press, reveal and
+    // row entrances all read as the same design language.
+    public const int PressMs = 90;
+    public const int HoverInMs = 170;
+    public const int HoverOutMs = 230;
+    public const int RevealMs = 340;
+    public const int RiseMs = 460;
+    public const int HeightMs = 520;
+    public const int StaggerMs = 32;
+
     private static readonly ConditionalWeakTable<FrameworkElement, HoverState> HoverStates = new();
     private static readonly ConditionalWeakTable<FrameworkElement, object> ButtonStates = new();
     private static readonly ConditionalWeakTable<FrameworkElement, object> RotateStates = new();
     private static readonly ConditionalWeakTable<FrameworkElement, object> CenterStates = new();
+    private static readonly ConditionalWeakTable<FrameworkElement, ScaleState> ScaleStates = new();
+
+    /// <summary>Tracked scale target so an interrupting animation never snaps back to 1f first.</summary>
+    private sealed class ScaleState
+    {
+        public float Target = 1f;
+    }
 
     private sealed class HoverState
     {
@@ -41,30 +59,30 @@ public static class Motion
         element.PointerEntered += (_, _) =>
         {
             state.Over = true;
-            AnimateScale(element, scale, 190);
-            MoveY(state, -lift, 190, 0);
+            AnimateScale(element, scale, HoverInMs);
+            MoveY(state, -lift, HoverInMs, 0);
         };
         element.PointerExited += (_, _) =>
         {
             state.Over = false;
-            AnimateScale(element, 1f, 240);
-            MoveY(state, 0, 240, 0);
+            AnimateScale(element, 1f, HoverOutMs);
+            MoveY(state, 0, HoverOutMs, 0);
         };
         element.PointerPressed += (_, _) =>
         {
-            AnimateScale(element, 0.986f, 90);
-            MoveY(state, 0, 90, 0);
+            AnimateScale(element, 0.986f, PressMs);
+            MoveY(state, 0, PressMs, 0);
         };
         element.PointerReleased += (_, _) =>
         {
-            AnimateScale(element, state.Over ? scale : 1f, 180);
-            MoveY(state, state.Over ? -lift : 0, 180, 0);
+            AnimateScale(element, state.Over ? scale : 1f, HoverInMs);
+            MoveY(state, state.Over ? -lift : 0, HoverInMs, 0);
         };
         element.PointerCaptureLost += (_, _) =>
         {
             state.Over = false;
-            AnimateScale(element, 1f, 200);
-            MoveY(state, 0, 200, 0);
+            AnimateScale(element, 1f, HoverOutMs);
+            MoveY(state, 0, HoverOutMs, 0);
         };
     }
 
@@ -72,25 +90,41 @@ public static class Motion
     public static void Enter(FrameworkElement element, int delayMs = 0, float fromScale = 0.992f, double fromY = 10)
     {
         element.Opacity = 0;
-        var translate = EnsureTranslate(element);
-        translate.Y = fromY;
+
+        // The rise runs on the composition Translation channel, not on the TranslateTransform that
+        // Hover() drives: sharing one transform made an entrance still in flight fight the hover
+        // lift (two storyboards writing the same Y), which is the "twitching" seen when the cursor
+        // reached a row while it was still rising in.
+        var visual = ElementCompositionPreview.GetElementVisual(element);
+        ElementCompositionPreview.SetIsTranslationEnabled(element, true);
+        // 没有强类型的 Visual.Translation（本 SDK 的 Visual 不暴露该属性），初始化值走属性表。
+        visual.Properties.InsertVector3("Translation", new Vector3(0f, (float)fromY, 0f));
+        var rise = visual.Compositor.CreateVector3KeyFrameAnimation();
+        rise.InsertKeyFrame(1f, Vector3.Zero, EaseOut(visual.Compositor));
+        rise.Duration = TimeSpan.FromMilliseconds(RiseMs);
+        if (delayMs > 0)
+        {
+            rise.DelayTime = TimeSpan.FromMilliseconds(delayMs);
+            rise.DelayBehavior = AnimationDelayBehavior.SetInitialValueBeforeDelay;
+        }
+        visual.StartAnimation("Translation", rise);
 
         var story = new Storyboard();
-        AddFade(story, element, 0, 1, 320, delayMs);
-        AddY(story, translate, fromY, 0, 480, delayMs, new CubicEase { EasingMode = EasingMode.EaseOut });
+        AddFade(story, element, 0, 1, RevealMs, delayMs);
         story.Begin();
 
         if (Math.Abs(fromScale - 1f) > 0.0005f)
         {
-            var visual = ElementCompositionPreview.GetElementVisual(element);
+            var scaleVisual = ElementCompositionPreview.GetElementVisual(element);
             Center(element);
-            visual.Scale = new Vector3(fromScale, fromScale, 1f);
-            var anim = visual.Compositor.CreateVector3KeyFrameAnimation();
-            anim.InsertKeyFrame(1f, Vector3.One, EaseOut(visual.Compositor));
-            anim.Duration = TimeSpan.FromMilliseconds(520);
+            scaleVisual.Scale = new Vector3(fromScale, fromScale, 1f);
+            ScaleStates.GetOrCreateValue(element).Target = 1f;
+            var anim = scaleVisual.Compositor.CreateVector3KeyFrameAnimation();
+            anim.InsertKeyFrame(1f, Vector3.One, EaseOut(scaleVisual.Compositor));
+            anim.Duration = TimeSpan.FromMilliseconds(HeightMs);
             anim.DelayTime = TimeSpan.FromMilliseconds(delayMs);
             anim.DelayBehavior = AnimationDelayBehavior.SetInitialValueBeforeDelay;
-            visual.StartAnimation("Scale", anim);
+            scaleVisual.StartAnimation("Scale", anim);
         }
     }
 
@@ -106,7 +140,7 @@ public static class Motion
             {
                 if (child is not FrameworkElement element || element.Visibility != Visibility.Visible) continue;
                 if (index >= 8) break;
-                Enter(element, index * 36, 0.996f, 14);
+                Enter(element, index * StaggerMs, 0.996f, 14);
                 index++;
             }
             return;
@@ -114,15 +148,26 @@ public static class Motion
         Enter(host, 0, 0.996f, 14);
     }
 
+    /// <summary>
+    /// Entrance for one row inside a batch-rendered list: a short fade + rise whose delay is
+    /// capped so a 116-row list still finishes settling almost immediately.
+    /// </summary>
+    public static void RowIn(FrameworkElement element, int indexInBatch, double fromY = 9)
+        => Enter(element, Math.Min(indexInBatch, 8) * StaggerMs, 1f, fromY);
+
     /// <summary>One-shot springy scale for the selected navigation pill or a completed action.</summary>
     public static void Bump(FrameworkElement element, float scale = 1.045f, int durationMs = 320)
     {
+        var state = ScaleStates.GetOrCreateValue(element);
+        var rest = state.Target;
+        if (Math.Abs(scale - rest) < 0.0004f) return;
+
         var visual = ElementCompositionPreview.GetElementVisual(element);
         Center(element);
         var anim = visual.Compositor.CreateVector3KeyFrameAnimation();
-        anim.InsertKeyFrame(0f, Vector3.One);
+        anim.InsertKeyFrame(0f, new Vector3(rest, rest, 1f));
         anim.InsertKeyFrame(0.42f, new Vector3(scale, scale, 1f), EaseOut(visual.Compositor));
-        anim.InsertKeyFrame(1f, Vector3.One, EaseOut(visual.Compositor));
+        anim.InsertKeyFrame(1f, new Vector3(rest, rest, 1f), EaseOut(visual.Compositor));
         anim.Duration = TimeSpan.FromMilliseconds(durationMs);
         visual.StartAnimation("Scale", anim);
     }
@@ -167,8 +212,8 @@ public static class Motion
         if (RotateStates.TryGetValue(element, out _)) return;
         RotateStates.Add(element, new object());
         Center(element);
-        element.PointerEntered += (_, _) => AnimateRotation(element, -degrees, scale, 260);
-        element.PointerExited += (_, _) => AnimateRotation(element, 0f, 1f, 300);
+        element.PointerEntered += (_, _) => AnimateRotation(element, -degrees, scale, HoverInMs + 90);
+        element.PointerExited += (_, _) => AnimateRotation(element, 0f, 1f, HoverOutMs + 70);
     }
 
     public static void AttachButtons(DependencyObject root)
@@ -188,10 +233,23 @@ public static class Motion
             AttachButtons(VisualTreeHelper.GetChild(root, i));
     }
 
+    /// <summary>
+    /// Scale with a tracked start value. Composition keyframe animations normally start from the
+    /// *base* value (1.0), so a second animation that interrupts a running one snaps to 1.0 first —
+    /// that snap is what reads as the card "twitching" when click (press) lands on top of hover.
+    /// Keeping our own target and feeding it as the 0% keyframe makes press/release/hover chain
+    /// continuously instead of restarting from scratch.
+    /// </summary>
     private static void AnimateScale(FrameworkElement element, float scale, int durationMs)
     {
+        var state = ScaleStates.GetOrCreateValue(element);
+        var from = state.Target;
+        if (Math.Abs(from - scale) < 0.0004f) return;
+        state.Target = scale;
+
         var visual = ElementCompositionPreview.GetElementVisual(element);
         var anim = visual.Compositor.CreateVector3KeyFrameAnimation();
+        anim.InsertKeyFrame(0f, new Vector3(from, from, 1f));
         anim.InsertKeyFrame(1f, new Vector3(scale, scale, 1f), EaseOut(visual.Compositor));
         anim.Duration = TimeSpan.FromMilliseconds(durationMs);
         visual.StartAnimation("Scale", anim);

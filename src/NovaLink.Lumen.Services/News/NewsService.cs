@@ -1,4 +1,6 @@
+using System.Net;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using NovaLink.Lumen.Core;
 using NovaLink.Lumen.Core.Models;
 using NovaLink.Lumen.Services.Http;
@@ -8,10 +10,14 @@ namespace NovaLink.Lumen.Services.News;
 public sealed class NewsService
 {
     private const string PatchNotesUrl = "https://launchercontent.mojang.com/v2/javaPatchNotes.json";
+    private const string ArticleBaseUrl = "https://launchercontent.mojang.com/v2/";
     private readonly AppPaths _paths;
     private readonly HttpService _http;
     private readonly string _cacheFile;
     private IReadOnlyList<NewsItem>? _cache;
+    // 正文按条目 id 在内存里缓存：同一条快讯重复打开不再走网络。
+    private readonly Dictionary<string, string> _articleCache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly object _articleLock = new();
 
     public NewsService(AppPaths paths, HttpService http)
     {
@@ -77,13 +83,76 @@ public sealed class NewsService
                 Str(entry, "date"),
                 url,
                 Str(entry, "shortText"),
-                Str(entry, "readMoreLink")));
+                Str(entry, "readMoreLink"),
+                Str(entry, "contentPath")));
         }
         return list;
     }
 
     private static string Str(JsonElement e, string name)
         => e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() ?? "" : "";
+
+    /// <summary>读取单条快讯的正文（官方 contentPath 指向的 JSON 里的 body），转成可读纯文本并缓存。失败返回 null，不抛异常。</summary>
+    public async Task<string?> GetArticleTextAsync(NewsItem item, CancellationToken ct = default)
+    {
+        if (item is null || string.IsNullOrWhiteSpace(item.Id)) return null;
+        // 没有正文路径（例如本地兜底的示例条目）就没有正文可取，先判空再查缓存。
+        if (string.IsNullOrWhiteSpace(item.ContentPath)) return null;
+        lock (_articleLock)
+        {
+            if (_articleCache.TryGetValue(item.Id, out var cached)) return cached;
+        }
+
+        var path = item.ContentPath.Trim();
+        var url = path.StartsWith("http", StringComparison.OrdinalIgnoreCase)
+            ? path
+            : ArticleBaseUrl + path.TrimStart('/');
+
+        try
+        {
+            var json = await _http.GetStringAsync(url, ct);
+            using var doc = JsonDocument.Parse(json);
+            var body = doc.RootElement.TryGetProperty("body", out var node) && node.ValueKind == JsonValueKind.String
+                ? node.GetString()
+                : null;
+            var text = ToPlainText(body ?? "");
+            if (string.IsNullOrWhiteSpace(text)) return null;
+            lock (_articleLock) { _articleCache[item.Id] = text; }
+            return text;
+        }
+        catch (OperationCanceledException)
+        {
+            return null;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("news", "读取快讯正文失败（" + item.Id + "）：" + ex.Message);
+            return null;
+        }
+    }
+
+    /// <summary>把更新日志正文的 HTML 转成纯文本：去标签、列表加「· 」、标题前后留空行、解码实体、压缩多余空行。</summary>
+    private static string ToPlainText(string html)
+    {
+        if (string.IsNullOrWhiteSpace(html)) return "";
+        var text = html;
+        text = Regex.Replace(text, @"<!--.*?-->", " ", RegexOptions.Singleline);
+        text = Regex.Replace(text, @"<(script|style)[^>]*>.*?</\1>", " ", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+        text = Regex.Replace(text, @"<h[1-6][^>]*>", "\n\n", RegexOptions.IgnoreCase);
+        text = Regex.Replace(text, @"</h[1-6]>", "\n\n", RegexOptions.IgnoreCase);
+        text = Regex.Replace(text, @"<li[^>]*>", "\n· ", RegexOptions.IgnoreCase);
+        text = Regex.Replace(text, @"</li>", "", RegexOptions.IgnoreCase);
+        text = Regex.Replace(text, @"<(br|hr)\s*/?>", "\n", RegexOptions.IgnoreCase);
+        text = Regex.Replace(text, @"</?(p|div|ul|ol|tr|table|section|article)[^>]*>", "\n\n", RegexOptions.IgnoreCase);
+        text = Regex.Replace(text, @"</?t[dh][^>]*>", "  ", RegexOptions.IgnoreCase);
+        text = Regex.Replace(text, @"<[^>]+>", "", RegexOptions.Singleline);
+        text = WebUtility.HtmlDecode(text);
+        text = text.Replace("\r\n", "\n").Replace('\r', '\n').Replace('\u00A0', ' ');
+        text = Regex.Replace(text, @"[ \t\f\v]+", " ");
+        text = Regex.Replace(text, @" *\n *", "\n");
+        text = Regex.Replace(text, @"\n{3,}", "\n\n");
+        return text.Trim();
+    }
 
     private bool TryReadCache(out IReadOnlyList<NewsItem> items, out TimeSpan age)
     {

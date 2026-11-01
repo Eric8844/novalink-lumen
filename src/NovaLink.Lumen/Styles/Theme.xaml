@@ -21,12 +21,16 @@
     <SolidColorBrush x:Key="BrushSky" Color="{StaticResource ColorSky}" />
     <SolidColorBrush x:Key="BrushDanger" Color="{StaticResource ColorDanger}" />
     <SolidColorBrush x:Key="BrushStroke" Color="{StaticResource ColorStroke}" />
+    <SolidColorBrush x:Key="BrushWarn" Color="#FFFFC078" />
+    <SolidColorBrush x:Key="BrushWarnSoft" Color="#33FFB86B" />
     <SolidColorBrush x:Key="BrushSurface" Color="#B30A101B" />
     <SolidColorBrush x:Key="BrushSurfaceRaised" Color="#D00E1624" />
     <SolidColorBrush x:Key="BrushTransparent" Color="Transparent" />
     <SolidColorBrush x:Key="BrushFillSubtle" Color="#14FFFFFF" />
     <SolidColorBrush x:Key="BrushFillSoft" Color="#10FFFFFF" />
     <SolidColorBrush x:Key="BrushBorderSubtle" Color="#1EFFFFFF" />
+    <!-- 滑块滑轨：比 BrushFillSubtle 更实一点，浅色玻璃上才看得见那条底线。 -->
+    <SolidColorBrush x:Key="BrushSliderTrack" Color="#26FFFFFF" />
     <SolidColorBrush x:Key="BrushField" Color="#0EFFFFFF" />
     <SolidColorBrush x:Key="BrushFieldBorder" Color="#1FFFFFFF" />
     <SolidColorBrush x:Key="BrushHover" Color="#18FFFFFF" />
@@ -70,6 +74,18 @@
         <GradientStop Color="#0FFFFFFF" Offset="0.72" />
         <GradientStop Color="#08FFFFFF" Offset="1" />
     </LinearGradientBrush>
+
+    <!-- Liquid-glass top gloss: sits above a glass surface as a 1px-ish sheen plus a soft falloff.
+         ThemeManager swaps the two stops so it reads as a light catch in dark mode and a
+         cool sheen in light mode. -->
+    <LinearGradientBrush x:Key="BrushGlassHighlight" StartPoint="0,0" EndPoint="0.35,1">
+        <GradientStop Color="#3DFFFFFF" Offset="0" />
+        <GradientStop Color="#12FFFFFF" Offset="0.28" />
+        <GradientStop Color="#00FFFFFF" Offset="0.62" />
+    </LinearGradientBrush>
+
+    <!-- Floating surfaces (menus, popovers, dock) blur what is behind them. -->
+    <AcrylicBrush x:Key="BrushGlassLiquid" TintColor="#0A111D" TintOpacity="0.58" FallbackColor="#E60A111D" />
 
     <Style x:Key="TextBase" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="Segoe UI Variable Display" />
@@ -176,6 +192,64 @@
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="HorizontalContentAlignment" Value="Center" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+
+    <!-- 页面级滚动容器：右侧留出滚动条的位置，避免细滚动条压在卡片文字上 -->
+    <Style x:Key="PageScroll" TargetType="ScrollViewer">
+        <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
+        <Setter Property="HorizontalScrollBarVisibility" Value="Disabled" />
+        <Setter Property="Padding" Value="0,0,12,0" />
+        <Setter Property="IsTabStop" Value="False" />
+    </Style>
+
+    <!-- 自定义滑块：细轨 + 薄荷填充 + 双层圆点，替掉 WinUI 默认的粗轨大圆点。
+         Slider 靠模板部件名定位进度：HorizontalTemplate / HorizontalTrackRect /
+         HorizontalDecreaseRect / HorizontalThumb，改名就失效。 -->
+    <Style x:Key="MusicSlider" TargetType="Slider">
+        <Setter Property="Foreground" Value="{StaticResource BrushMint}" />
+        <Setter Property="Background" Value="{StaticResource BrushSliderTrack}" />
+        <Setter Property="IsThumbToolTipEnabled" Value="False" />
+        <Setter Property="UseSystemFocusVisuals" Value="False" />
+        <Setter Property="Height" Value="20" />
+        <Setter Property="MinWidth" Value="60" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Slider">
+                    <!-- 结构必须和 WinUI 默认模板一致：三列（已选 / 滑块 / 剩余），
+                         Slider 的代码按列宽算滑块位置、按 HorizontalTrackRect 的宽度算数值。
+                         少了这三列，点击与拖动的落点会整体偏移，拖到哪都不准。 -->
+                    <Grid Background="Transparent" VerticalAlignment="Center" Height="20">
+                        <Grid x:Name="HorizontalTemplate" Height="20">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <!-- 部件必须用 Rectangle（换成 Border 控件就找不到，已选进度不上色）。 -->
+                            <Rectangle x:Name="HorizontalTrackRect" Grid.ColumnSpan="3" Height="4"
+                                       RadiusX="2" RadiusY="2" VerticalAlignment="Center"
+                                       Fill="{TemplateBinding Background}" />
+                            <Rectangle x:Name="HorizontalDecreaseRect" Grid.Column="0" Height="4"
+                                       RadiusX="2" RadiusY="2" VerticalAlignment="Center"
+                                       Fill="{TemplateBinding Foreground}" />
+                            <Thumb x:Name="HorizontalThumb" Grid.Column="1" Width="18" Height="18"
+                                   VerticalAlignment="Center" Background="{TemplateBinding Foreground}">
+                                <Thumb.Template>
+                                    <ControlTemplate TargetType="Thumb">
+                                        <Grid Width="18" Height="18">
+                                            <Ellipse Width="18" Height="18" Opacity="0.22"
+                                                     Fill="{TemplateBinding Background}" />
+                                            <Ellipse Width="10" Height="10" Fill="{TemplateBinding Background}" />
+                                        </Grid>
+                                    </ControlTemplate>
+                                </Thumb.Template>
+                            </Thumb>
+                        </Grid>
+                        <Grid x:Name="VerticalTemplate" Height="20" Visibility="Collapsed" />
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
     <LinearGradientBrush x:Key="BrushNavSelected" StartPoint="0,0" EndPoint="1,1">

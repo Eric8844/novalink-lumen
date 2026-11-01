@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
+using NovaLink.Lumen.Controls;
 using NovaLink.Lumen.Core.Models;
 using NovaLink.Lumen.Services;
 using NovaLink.Lumen.Services.Modrinth;
@@ -21,10 +22,30 @@ namespace NovaLink.Lumen.Views.Dialogs;
 /// <summary>Rich Modrinth project detail used by 发现 and 库, mirroring the Electron project page.</summary>
 public static class ProjectDetailDialog
 {
-    private static readonly Color Text = Color.FromArgb(0xFF, 0xF3, 0xF7, 0xFE);
-    private static readonly Color Muted = Color.FromArgb(0xFF, 0x91, 0xA0, 0xB8);
-    private static readonly Color Faint = Color.FromArgb(0xFF, 0x6E, 0x7E, 0x95);
-    private static readonly Color Mint = Color.FromArgb(0xFF, 0x7C, 0xEB, 0xD6);
+    // 文字/强调色一律走主题画刷：浅色模式自动换成深字，不再写死深色模式的浅色值。
+    private static Brush Text => ThemeManager.BrushText;
+    private static Brush Muted => ThemeManager.BrushTextSecondary;
+    private static Brush Faint => ThemeManager.BrushTextTertiary;
+    private static Brush Mint => ThemeManager.BrushAccent;
+
+    /// <summary>控件淡底（版本按钮、文件选择、标签等），深浅色都跟着主题走。</summary>
+    private static Brush FillSubtle => ThemeManager.Brush("BrushFillSubtle", ThemeManager.ControlFill);
+
+    /// <summary>更轻的一层淡底，用于链接按钮这种小号控件。</summary>
+    private static Brush FillSoft => ThemeManager.Brush("BrushFillSoft", ThemeManager.ControlFill);
+
+    /// <summary>控件描边：深色是低透明度白线，浅色是低透明度深线，保证浅色下也能看见边界。</summary>
+    private static Brush FieldEdge => ThemeManager.Brush("BrushFieldBorder", ThemeManager.ControlBorder);
+
+    /// <summary>玻璃描边，用于图标底座与画廊缩略图。</summary>
+    private static Brush GlassRim => ThemeManager.Brush("BrushGlassRim", ThemeManager.ControlBorder);
+
+    /// <summary>强调色的半透明底色（按当前主题的强调色取色，不写死 #7CEBD6）。</summary>
+    private static Brush AccentTint(byte alpha)
+    {
+        var accent = ThemeManager.Accent;
+        return new SolidColorBrush(Color.FromArgb(alpha, accent.R, accent.G, accent.B));
+    }
 
     public static async Task ShowAsync(XamlRoot root, ModrinthProject project, InstanceSummary? instance,
         string? installedVersion = null, bool readOnly = false)
@@ -53,7 +74,7 @@ public static class ProjectDetailDialog
         var zhIntro = new TextBlock
         {
             Text = "正在翻译简介…", FontSize = 12, LineHeight = 21, TextWrapping = TextWrapping.Wrap,
-            Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0xC7, 0xD3, 0xE6))
+            Foreground = ThemeManager.BrushTextSecondary
         };
         content.Children.Add(SectionTitle("中文简介"));
         content.Children.Add(zhIntro);
@@ -63,13 +84,13 @@ public static class ProjectDetailDialog
         {
             Text = Clean(project.Description + "\n\n" + project.Body),
             FontSize = 12, LineHeight = 21, TextWrapping = TextWrapping.Wrap,
-            Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0xC7, 0xD3, 0xE6))
+            Foreground = ThemeManager.BrushTextSecondary
         });
 
         var dependencyText = new TextBlock
         {
             Text = "正在读取依赖…", FontSize = 11, TextWrapping = TextWrapping.Wrap,
-            Foreground = new SolidColorBrush(Muted)
+            Foreground = Muted
         };
         content.Children.Add(SectionTitle("必需依赖"));
         content.Children.Add(dependencyText);
@@ -78,12 +99,12 @@ public static class ProjectDetailDialog
         var versionTitle = new TextBlock
         {
             Text = "正在读取全部版本…", FontSize = 13.5, FontWeight = FontWeights.SemiBold,
-            Foreground = new SolidColorBrush(Text), TextTrimming = TextTrimming.CharacterEllipsis
+            Foreground = Text, TextTrimming = TextTrimming.CharacterEllipsis
         };
         var versionSub = new TextBlock
         {
             Text = "点击进入版本选择，加载时会显示骨架动画。",
-            FontSize = 10, Foreground = new SolidColorBrush(Faint), TextWrapping = TextWrapping.Wrap
+            FontSize = 10, Foreground = Faint, TextWrapping = TextWrapping.Wrap
         };
         var versionCopy = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
         versionCopy.Children.Add(versionTitle);
@@ -94,7 +115,7 @@ public static class ProjectDetailDialog
         versionGrid.Children.Add(versionCopy);
         var versionChevron = new FontIcon
         {
-            Glyph = "\uE76C", FontSize = 11, Foreground = new SolidColorBrush(Muted),
+            Glyph = "\uE76C", FontSize = 11, Foreground = Muted,
             VerticalAlignment = VerticalAlignment.Center
         };
         Grid.SetColumn(versionChevron, 1);
@@ -105,8 +126,8 @@ public static class ProjectDetailDialog
             HorizontalContentAlignment = HorizontalAlignment.Stretch,
             Height = 58, Padding = new Thickness(13, 8, 13, 8),
             CornerRadius = new CornerRadius(13),
-            Background = new SolidColorBrush(Color.FromArgb(0x12, 0xFF, 0xFF, 0xFF)),
-            BorderBrush = new SolidColorBrush(Color.FromArgb(0x20, 0xFF, 0xFF, 0xFF)),
+            Background = FillSubtle,
+            BorderBrush = FieldEdge,
             BorderThickness = new Thickness(1),
             IsEnabled = true,
             Content = versionGrid
@@ -122,7 +143,7 @@ public static class ProjectDetailDialog
         };
         var fileInfo = new TextBlock
         {
-            FontSize = 10.5, Foreground = new SolidColorBrush(Faint), TextWrapping = TextWrapping.Wrap
+            FontSize = 10.5, Foreground = Faint, TextWrapping = TextWrapping.Wrap
         };
         var selectedFolder = instance is null
             ? ""
@@ -130,7 +151,7 @@ public static class ProjectDetailDialog
         var folderText = new TextBlock
         {
             Text = string.IsNullOrWhiteSpace(selectedFolder) ? "尚未选择保存位置" : selectedFolder,
-            FontSize = 10, Foreground = new SolidColorBrush(string.IsNullOrWhiteSpace(selectedFolder) ? Faint : Muted),
+            FontSize = 10, Foreground = (string.IsNullOrWhiteSpace(selectedFolder) ? Faint : Muted),
             TextTrimming = TextTrimming.CharacterEllipsis, TextWrapping = TextWrapping.Wrap,
             VerticalAlignment = VerticalAlignment.Center
         };
@@ -138,9 +159,9 @@ public static class ProjectDetailDialog
         {
             Content = "更改", Height = 30, MinWidth = 62, Padding = new Thickness(12, 0, 12, 0),
             CornerRadius = new CornerRadius(9),
-            Background = new SolidColorBrush(Color.FromArgb(0x16, 0xFF, 0xFF, 0xFF)),
-            BorderBrush = new SolidColorBrush(Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF)),
-            BorderThickness = new Thickness(1), Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0xC7, 0xD3, 0xE6))
+            Background = FillSubtle,
+            BorderBrush = FieldEdge,
+            BorderThickness = new Thickness(1), Foreground = ThemeManager.BrushTextSecondary
         };
         var folderGrid = new Grid { ColumnSpacing = 8 };
         folderGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -151,14 +172,14 @@ public static class ProjectDetailDialog
         var progress = new ProgressBar
         {
             Height = 5, IsIndeterminate = false, Value = 0,
-            Foreground = new SolidColorBrush(Mint),
-            Background = new SolidColorBrush(Color.FromArgb(0x18, 0xFF, 0xFF, 0xFF)),
+            Foreground = Mint,
+            Background = FillSubtle,
             CornerRadius = new CornerRadius(3), Visibility = Visibility.Collapsed
         };
         var status = new TextBlock
         {
             Text = installedVersion is null ? "选择版本后即可安装。" : "当前已安装 · " + installedVersion,
-            FontSize = 11, TextWrapping = TextWrapping.Wrap, Foreground = new SolidColorBrush(Muted)
+            FontSize = 11, TextWrapping = TextWrapping.Wrap, Foreground = Muted
         };
         content.Children.Add(versionButton);
         content.Children.Add(fileBox);
@@ -168,6 +189,9 @@ public static class ProjectDetailDialog
         content.Children.Add(dependenciesToggle);
         content.Children.Add(progress);
         content.Children.Add(status);
+
+        // 这里的按钮是 Show 之后才建的，GlassModal 构造时的 AttachButtons 覆盖不到，补挂一次统一悬停动效。
+        Motion.AttachButtons(content);
 
         var versions = new List<ModrinthVersion>();
         Task<IReadOnlyList<ModrinthVersion>>? versionsTask = null;
@@ -236,7 +260,7 @@ public static class ProjectDetailDialog
             if (string.IsNullOrWhiteSpace(picked)) return;
             selectedFolder = picked;
             folderText.Text = picked;
-            folderText.Foreground = new SolidColorBrush(Muted);
+            folderText.Foreground = Muted;
         };
 
         fileBox.SelectionChanged += (_, _) =>
@@ -339,7 +363,7 @@ public static class ProjectDetailDialog
             if (string.IsNullOrWhiteSpace(folder)) folder = selectedFolder;
             selectedFolder = folder;
             folderText.Text = folder;
-            folderText.Foreground = new SolidColorBrush(Muted);
+            folderText.Foreground = Muted;
 
             progress.Visibility = Visibility.Visible;
             progress.Value = 0;
@@ -428,8 +452,8 @@ public static class ProjectDetailDialog
         var iconBorder = new Border
         {
             Width = 66, Height = 66, CornerRadius = new CornerRadius(17),
-            Background = new SolidColorBrush(Color.FromArgb(0x24, 0x7C, 0xEB, 0xD6)),
-            BorderBrush = new SolidColorBrush(Color.FromArgb(0x26, 0xFF, 0xFF, 0xFF)),
+            Background = AccentTint(0x24),
+            BorderBrush = GlassRim,
             BorderThickness = new Thickness(1)
         };
         if (!string.IsNullOrWhiteSpace(project.IconUrl))
@@ -444,7 +468,7 @@ public static class ProjectDetailDialog
             {
                 Text = string.IsNullOrEmpty(project.Title) ? "?" : project.Title[..1].ToUpperInvariant(),
                 FontSize = 25, FontWeight = FontWeights.SemiBold,
-                Foreground = new SolidColorBrush(Mint),
+                Foreground = Mint,
                 HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center
             };
         }
@@ -454,10 +478,10 @@ public static class ProjectDetailDialog
         copy.Children.Add(new TextBlock
         {
             Text = project.Title, FontSize = 21, FontWeight = FontWeights.SemiBold,
-            Foreground = new SolidColorBrush(Text), TextWrapping = TextWrapping.Wrap
+            Foreground = Text, TextWrapping = TextWrapping.Wrap
         });
         if (!string.IsNullOrWhiteSpace(project.ZhTitle))
-            copy.Children.Add(new TextBlock { Text = "中文名：" + project.ZhTitle, FontSize = 11, Foreground = new SolidColorBrush(Mint) });
+            copy.Children.Add(new TextBlock { Text = "中文名：" + project.ZhTitle, FontSize = 11, Foreground = Mint });
         var chips = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5 };
         foreach (var category in project.DisplayCategories.Concat(project.Categories).Distinct().Take(5))
             chips.Children.Add(Chip(CategoryLabel(category)));
@@ -466,7 +490,7 @@ public static class ProjectDetailDialog
         {
             Text = ShortNumber(project.Downloads) + " 下载 · " + ShortNumber(project.Followers) + " 关注 · "
                    + (project.License?.Name ?? "未标注许可") + (installedVersion is null ? "" : " · 已安装 " + installedVersion),
-            FontSize = 10, Foreground = new SolidColorBrush(Faint), TextWrapping = TextWrapping.Wrap
+            FontSize = 10, Foreground = Faint, TextWrapping = TextWrapping.Wrap
         };
         copy.Children.Add(stats);
         Grid.SetColumn(copy, 1);
@@ -484,6 +508,7 @@ public static class ProjectDetailDialog
     private static FrameworkElement BuildGallery(ModrinthProject project, GlassModal modal)
     {
         var panel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        var index = 0;
         foreach (var item in project.Gallery.Take(5))
         {
             var image = new Image { Width = 150, Height = 84, Stretch = Stretch.UniformToFill };
@@ -491,10 +516,13 @@ public static class ProjectDetailDialog
             var border = new Border
             {
                 Width = 150, Height = 84, CornerRadius = new CornerRadius(10),
-                BorderBrush = new SolidColorBrush(Color.FromArgb(0x26, 0xFF, 0xFF, 0xFF)),
+                BorderBrush = GlassRim,
                 BorderThickness = new Thickness(1), Child = image
             };
-            border.Tapped += (_, _) => OpenGallery(modal, item.Url);
+            border.Tapped += (_, _) => ImageViewer.Show(modal, item.Url);
+            // 缩略图轻微放大 + 逐张入场，提示可点开看大图。
+            Motion.Hover(border, 1.02f, 0f);
+            Motion.RowIn(border, index++, 7);
             panel.Children.Add(border);
         }
         return new ScrollViewer
@@ -507,16 +535,16 @@ public static class ProjectDetailDialog
     private static TextBlock SectionTitle(string text) => new()
     {
         Text = text, FontSize = 9, CharacterSpacing = 160, Margin = new Thickness(0, 4, 0, -6),
-        Foreground = new SolidColorBrush(Faint)
+        Foreground = Faint
     };
 
     private static Border Chip(string text) => new()
     {
         CornerRadius = new CornerRadius(7), Padding = new Thickness(7, 2, 7, 2),
-        Background = new SolidColorBrush(Color.FromArgb(0x16, 0xFF, 0xFF, 0xFF)),
-        BorderBrush = new SolidColorBrush(Color.FromArgb(0x1C, 0xFF, 0xFF, 0xFF)),
+        Background = FillSubtle,
+        BorderBrush = FieldEdge,
         BorderThickness = new Thickness(1),
-        Child = new TextBlock { Text = text, FontSize = 9, Foreground = new SolidColorBrush(Muted) }
+        Child = new TextBlock { Text = text, FontSize = 9, Foreground = Muted }
     };
 
     private static void AddLink(StackPanel panel, string label, string? url)
@@ -526,9 +554,9 @@ public static class ProjectDetailDialog
         {
             Content = label, Height = 26, Padding = new Thickness(10, 0, 10, 0),
             CornerRadius = new CornerRadius(8), FontSize = 9.5,
-            Background = new SolidColorBrush(Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF)),
-            BorderBrush = new SolidColorBrush(Color.FromArgb(0x1C, 0xFF, 0xFF, 0xFF)),
-            BorderThickness = new Thickness(1), Foreground = new SolidColorBrush(Muted)
+            Background = FillSoft,
+            BorderBrush = FieldEdge,
+            BorderThickness = new Thickness(1), Foreground = Muted
         };
         button.Click += async (_, _) =>
         {
@@ -563,48 +591,39 @@ public static class ProjectDetailDialog
         _ => value.ToString()
     };
 
+    /// <summary>翻译最多等 4 秒：没配通道或网络慢时先收尾，别让「正在翻译简介…」一直转圈。</summary>
+    private const int TranslationTimeoutMs = 4000;
+
     private static async Task TranslateIntroAsync(TextBlock target, string source)
     {
         try
         {
-            var translated = await LumenRuntime.Modrinth.TranslateToChineseAsync(source);
-            target.Text = string.IsNullOrWhiteSpace(translated) ? "暂无中文简介。" : translated;
+            var translate = LumenRuntime.Modrinth.TranslateToChineseAsync(source);
+            var finished = await Task.WhenAny(translate, Task.Delay(TranslationTimeoutMs));
+            if (!ReferenceEquals(finished, translate))
+            {
+                AppLog.Warn("projects", "翻译简介超时（" + TranslationTimeoutMs + "ms），回落到英文原文");
+                _ = ObserveAsync(translate);
+                target.Text = "暂时没有中文简介，请直接看下方英文原文。";
+                return;
+            }
+
+            var translated = await translate;
+            target.Text = string.IsNullOrWhiteSpace(translated)
+                ? "暂时没有中文简介，请直接看下方英文原文。"
+                : translated;
         }
-        catch
+        catch (Exception ex)
         {
-            target.Text = "暂无中文简介。";
+            AppLog.Warn("projects", "翻译简介失败：" + ex.Message);
+            target.Text = "暂时没有中文简介，请直接看下方英文原文。";
         }
     }
 
-    private static void OpenGallery(GlassModal modal, string url)
+    /// <summary>超时后原来的翻译请求还在跑，这里把它的异常吃掉，避免未观察异常。</summary>
+    private static async Task ObserveAsync(Task task)
     {
-        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return;
-        var overlay = new Grid
-        {
-            Background = new SolidColorBrush(Color.FromArgb(0xF4, 0x03, 0x07, 0x0D)),
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            VerticalAlignment = VerticalAlignment.Stretch
-        };
-        var image = new Image
-        {
-            Stretch = Stretch.Uniform,
-            Margin = new Thickness(48, 56, 48, 56)
-        };
-        image.Source = new BitmapImage(uri);
-        overlay.Children.Add(image);
-        var close = new Button
-        {
-            Content = "关闭预览", Height = 32, Padding = new Thickness(16, 0, 16, 0),
-            HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top,
-            Margin = new Thickness(0, 52, 24, 0), CornerRadius = new CornerRadius(10), FontSize = 10.5
-        };
-        close.Click += (_, _) => modal.ClearOverlay();
-        overlay.Children.Add(close);
-        overlay.Tapped += (_, e) =>
-        {
-            if (ReferenceEquals(e.OriginalSource, overlay)) modal.ClearOverlay();
-        };
-        modal.ShowOverlay(overlay);
+        try { await task; } catch { }
     }
 
     private static string CategoryLabel(string value) => value.ToLowerInvariant() switch

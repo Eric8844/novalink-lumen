@@ -4,7 +4,7 @@ NovaLink Lumen 是 NovaLink 系列的 Minecraft Java Edition 启动器，使用 
 
 它把版本管理、模组与整合包、账户、下载、论坛和个性化外观放在同一个桌面界面里，同时保留 Minecraft 原有的游戏目录与数据。
 
-- 当前版本：**V1.4.0**
+- 当前版本：**V1.5.0**（正式版；测试版通道说明见 [docs/PREVIEW.md](docs/PREVIEW.md)）
 - 系统：Windows 10 19041+ / Windows 11，x64
 - 运行环境：自包含发布，安装包已包含 .NET 与 Windows App SDK 运行时
 - 许可证：MIT
@@ -60,7 +60,7 @@ NovaLink Lumen 是 NovaLink 系列的 Minecraft Java Edition 启动器，使用 
 - 游戏目录、版本隔离、Java 运行时、下载线程
 - 外观、主题色、Win2D 玻璃参数、背景与音乐
 - GitHub Releases 检查更新
-- 卸载时默认保留账户、实例与游戏数据
+- 卸载时默认保留账户、实例与游戏数据；升级前自动把数据备份到 `%LOCALAPPDATA%\NovaLink Lumen\Data_Backup_v<源版本>`
 
 ## 截图
 
@@ -93,20 +93,21 @@ dotnet build src/NovaLink.Lumen/NovaLink.Lumen.csproj -c Debug -p:Platform=x64
 src/NovaLink.Lumen/bin/x64/Debug/net10.0-windows10.0.19041.0/win-x64/NovaLink.Lumen.exe
 ```
 
-发布自包含版本：
+发布自包含版本并打安装包（推荐一步到位）：
 
 ```powershell
-dotnet publish src/NovaLink.Lumen/NovaLink.Lumen.csproj `
-  -c Release -r win-x64 --self-contained true -o dist/release
+powershell -ExecutionPolicy Bypass -File scripts\build.ps1
 ```
 
-生成安装包：
+脚本会先做“上一版本已归档”闸门，再 publish、makensis，最后核对安装包产品版本并打印 SHA256。
+单独执行时也可以用：
 
 ```powershell
+dotnet publish src/NovaLink.Lumen/NovaLink.Lumen.csproj -c Release -r win-x64 --self-contained true -p:Platform=x64 -o dist/release
 makensis installer/installer.nsi
 ```
 
-产物：`dist/NovaLinkLumen-Setup.exe`。
+产物：`dist/NovaLinkLumen-WinUI-Setup-<版本>.exe`。v1.5.0 起产物文件名带版本号，发布通道由 `-p:NovaLinkChannel=Stable|Preview` 决定（**默认 Preview**，正式发版务必显式传 `Stable`），测试版流程见 [docs/PUBLISHING.md](docs/PUBLISHING.md) 第 6.1 节。`dist/` 被 `.gitignore` 忽略，下一次 publish 会原地覆盖它 —— 发版前先按 [docs/PUBLISHING.md](docs/PUBLISHING.md) 把上一版本归档进 `archives/`。
 
 > 发布目录需要同时包含 `NovaLink.Lumen.pri` 与 `Assets` 资源；项目已通过 `CopyPriToPublish` 和 Content 规则自动补齐。
 
@@ -118,7 +119,8 @@ src/NovaLink.Lumen.Services    账户、Microsoft、NovaLink、Java、实例、�
 src/NovaLink.Lumen             WinUI 3 应用（Shell、页面、对话框、Win2D 控件）
 installer                      NSIS 安装脚本
 docs                           架构、发布与截图
-scripts                        构建辅助脚本
+scripts                        构建辅助脚本（build / bump-version / archive-release）
+archives                       发版产物离线归档（规则见 archives/README.md）
 ```
 
 更完整的模块说明见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)，发布流程见 [docs/PUBLISHING.md](docs/PUBLISHING.md)。

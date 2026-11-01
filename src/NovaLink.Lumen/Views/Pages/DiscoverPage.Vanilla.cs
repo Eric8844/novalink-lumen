@@ -73,6 +73,7 @@ public sealed partial class DiscoverPage
         var query = SearchBox.Text.Trim();
         _query = query;
         _category = string.IsNullOrWhiteSpace(_category) ? "" : _category;
+        ShowBusy(query.Length > 0 ? "正在查找版本「" + query + "」…" : "正在读取版本列表…");
         ShowSkeleton(query.Length > 0 ? "正在查找版本 " + query + " …" : "正在读取 Mojang 版本清单…");
         EmptyPanel.Visibility = Visibility.Collapsed;
         LoadMoreButton.Visibility = Visibility.Collapsed;
@@ -81,10 +82,12 @@ public sealed partial class DiscoverPage
 
         try
         {
-            var manifest = await LumenRuntime.Manifest.GetAsync();
+            // 清单请求和 JSON 解析放到后台线程，UI 线程只负责搭版本行。
+            var manifest = await Task.Run(() => LumenRuntime.Manifest.GetAsync());
             _vanillaManifest = manifest;
             await HoldSkeletonAsync();
-            RenderVanilla();
+            HideBusy();
+            await RenderVanillaAsync();
         }
         catch (Exception ex)
         {
@@ -94,32 +97,50 @@ public sealed partial class DiscoverPage
             EmptyPanel.Visibility = Visibility.Visible;
             AppLog.Warn("discover", "原版版本清单失败：" + ex.Message);
         }
+        finally
+        {
+            HideBusy();
+        }
     }
 
-    private void RenderVanilla()
+    /// <summary>
+    /// 渲染原版版本列表。目录探测与分组放到后台线程算，版本行分批搭建（每批 6 行让出一帧），
+    /// 每次渲染自增 <see cref="_renderToken"/>，过期的一轮在下一个检查点直接退出。
+    /// </summary>
+    private async Task RenderVanillaAsync()
     {
+        var token = ++_renderToken;
         ResultsPanel.Children.Clear();
+        HideBusy();
         var query = _query.Trim();
         var root = LumenRuntime.Settings.Settings.GameRoot;
-        var installed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var item in _vanillaManifest)
+
+        // 逐版本探测 versions 目录是同步 IO，放后台线程做完再回 UI 线程。
+        var (installed, latestRelease, items) = await Task.Run(() =>
         {
-            try
+            var installedSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var item in _vanillaManifest)
             {
-                if (Directory.Exists(Path.Combine(root, "versions", item.Id))) installed.Add(item.Id);
+                try
+                {
+                    if (Directory.Exists(Path.Combine(root, "versions", item.Id))) installedSet.Add(item.Id);
+                }
+                catch { }
             }
-            catch { }
-        }
 
-        var latestRelease = _vanillaManifest
-            .Where(v => v.Type == "release")
-            .OrderByDescending(v => v.ReleaseTime)
-            .Select(v => v.Id)
-            .FirstOrDefault();
+            var latest = _vanillaManifest
+                .Where(v => v.Type == "release")
+                .OrderByDescending(v => v.ReleaseTime)
+                .Select(v => v.Id)
+                .FirstOrDefault();
 
-        var items = _vanillaManifest
-            .Where(v => query.Length == 0 || v.Id.Contains(query, StringComparison.OrdinalIgnoreCase))
-            .ToList();
+            var filtered = _vanillaManifest
+                .Where(v => query.Length == 0 || v.Id.Contains(query, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            return (installedSet, latest, filtered);
+        });
+        if (token != _renderToken) return;
 
         var groups = items
             .GroupBy(VanillaGroupKey)
@@ -148,14 +169,14 @@ public sealed partial class DiscoverPage
         var wrapper = new Border
         {
             Style = (Style)Application.Current.Resources["GlassCard"],
-            Background = (Brush)Application.Current.Resources["BrushCardTint"],
             Padding = new Thickness(18, 16, 18, 16)
         };
-        wrapper.Child = body;
+        wrapper.Child = GlassSurface(body);
 
         var first = true;
         foreach (var group in groups)
         {
+            if (token != _renderToken) return;
             var versions = group
                 .OrderByDescending(v => v.ReleaseTime)
                 .ToList();
@@ -172,7 +193,14 @@ public sealed partial class DiscoverPage
             var rows = new StackPanel { Spacing = 4, Margin = new Thickness(2, 4, 2, 6) };
             var initial = Math.Min(12, versions.Count);
             for (var i = 0; i < initial; i++)
+            {
                 rows.Children.Add(BuildVanillaRow(versions[i], installed.Contains(versions[i].Id), versions[i].Id == latestRelease));
+                if ((i + 1) % 6 == 0)
+                {
+                    await UiYield.NextFrameAsync();
+                    if (token != _renderToken) return;
+                }
+            }
 
             if (versions.Count > initial)
             {
@@ -188,8 +216,13 @@ public sealed partial class DiscoverPage
                 };
                 more.Click += (_, _) =>
                 {
+                    var index = 0;
                     foreach (var version in (IReadOnlyList<ManifestVersion>)more.Tag)
-                        rows.Children.Insert(rows.Children.Count - 1, BuildVanillaRow(version, installed.Contains(version.Id), version.Id == latestRelease));
+                    {
+                        var added = BuildVanillaRow(version, installed.Contains(version.Id), version.Id == latestRelease);
+                        rows.Children.Insert(rows.Children.Count - 1, added);
+                        Motion.RowIn(added, index++);
+                    }
                     more.Visibility = Visibility.Collapsed;
                 };
                 rows.Children.Add(more);
@@ -197,8 +230,14 @@ public sealed partial class DiscoverPage
 
             expander.Content = rows;
             body.Children.Add(expander);
+            // 挂进视觉树之后再让每行入场，避免动画落在未上屏的元素上。
+            var stagger = 0;
+            foreach (var child in rows.Children)
+                if (child is FrameworkElement rowElement) Motion.RowIn(rowElement, stagger++);
+            await UiYield.NextFrameAsync();
         }
 
+        if (token != _renderToken) return;
         ResultsPanel.Children.Add(wrapper);
         EmptyPanel.Visibility = Visibility.Collapsed;
     }
@@ -209,8 +248,9 @@ public sealed partial class DiscoverPage
         {
             CornerRadius = new CornerRadius(14),
             Padding = new Thickness(12, 10, 12, 10),
-            Background = new SolidColorBrush(Color.FromArgb(0x10, 0xFF, 0xFF, 0xFF)),
-            BorderBrush = new SolidColorBrush(Color.FromArgb(0x18, 0xFF, 0xFF, 0xFF)),
+            // 浅色下 0x10FFFFFF 的白几乎不可见，行会糊成一片；改用主题 fill/border token。
+            Background = Res("BrushFillSoft"),
+            BorderBrush = Res("BrushBorderSubtle"),
             BorderThickness = new Thickness(1),
             Tag = "no-motion"
         };
@@ -232,8 +272,9 @@ public sealed partial class DiscoverPage
                 EndPoint = new Windows.Foundation.Point(1, 1),
                 GradientStops =
                 {
-                    new GradientStop { Color = Color.FromArgb(0x55, 0x7C, 0xEB, 0xD6), Offset = 0 },
-                    new GradientStop { Color = Color.FromArgb(0x33, 0xA9, 0x96, 0xFF), Offset = 1 }
+                    // accent 由主题决定（浅色下是更深的青绿），半透明叠出玻璃反光。
+                    new GradientStop { Color = WithAlpha(ThemeManager.Accent, 0x55), Offset = 0 },
+                    new GradientStop { Color = WithAlpha(ThemeManager.IsLight ? ThemeManager.Accent : Color.FromArgb(0xFF, 0xA9, 0x96, 0xFF), 0x33), Offset = 1 }
                 }
             },
             Child = new FontIcon { Glyph = "\uE7FC", FontSize = 16, Foreground = (Brush)Application.Current.Resources["BrushMint"] }
@@ -273,8 +314,8 @@ public sealed partial class DiscoverPage
             Spacing = 6,
             VerticalAlignment = VerticalAlignment.Center
         };
-        if (latest) badges.Children.Add(VanillaPill("最新正式版", Color.FromArgb(0xFF, 0x7C, 0xEB, 0xD6)));
-        if (installed) badges.Children.Add(VanillaPill("已安装", Color.FromArgb(0xFF, 0x9B, 0xE8, 0xB8)));
+        if (latest) badges.Children.Add(VanillaPill("最新正式版", ThemeManager.Accent));
+        if (installed) badges.Children.Add(VanillaPill("已安装", InstalledTint));
         Grid.SetColumn(badges, 2);
         grid.Children.Add(badges);
 
@@ -335,7 +376,7 @@ public sealed partial class DiscoverPage
             Foreground = (Brush)Application.Current.Resources["BrushTextTertiary"]
         });
         grid.Children.Add(stack);
-        var countPill = VanillaPill(count + " 个版本", Color.FromArgb(0xFF, 0x9A, 0xB4, 0xCF));
+        var countPill = VanillaPill(count + " 个版本", ThemeManager.TextSecondary);
         Grid.SetColumn(countPill, 1);
         grid.Children.Add(countPill);
         return grid;
@@ -355,7 +396,7 @@ public sealed partial class DiscoverPage
             if (installed)
             {
                 _instances = (await LumenRuntime.Instances.ScanAsync()).ToList();
-                RenderVanilla();
+                await RenderVanillaAsync();
             }
         }
         catch (Exception ex)
@@ -374,7 +415,7 @@ public sealed partial class DiscoverPage
         finally
         {
             _vanillaInstalling = false;
-            RenderVanilla();
+            await RenderVanillaAsync();
         }
     }
 
@@ -407,6 +448,14 @@ public sealed partial class DiscoverPage
         "fool" => "愚人节版",
         _ => "其他版本"
     };
+
+    /// <summary>"已安装"标签的颜色：浅色下用更深的绿、深色下用浅绿，保证 9px 文字两种主题都可读。</summary>
+    private static Color InstalledTint => ThemeManager.IsLight
+        ? Color.FromArgb(0xFF, 0x1F, 0x8A, 0x5F)
+        : Color.FromArgb(0xFF, 0x9B, 0xE8, 0xB8);
+
+    /// <summary>给主题色叠一层 alpha，做半透明玻璃底/描边。</summary>
+    private static Color WithAlpha(Color color, byte alpha) => Color.FromArgb(alpha, color.R, color.G, color.B);
 
     private static string ShortPath(string path)
     {

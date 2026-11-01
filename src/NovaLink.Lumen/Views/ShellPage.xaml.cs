@@ -1,17 +1,23 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.UI.Xaml.Shapes;
 using NovaLink.Lumen.Controls;
 using NovaLink.Lumen.Core;
 using NovaLink.Lumen.Core.Models;
+using NovaLink.Lumen.Core.Plugins;
+using NovaLink.Lumen.Plugins;
 using NovaLink.Lumen.Services;
 using NovaLink.Lumen.Services.Minecraft;
+using NovaLink.Lumen.Services.Updates;
 using NovaLink.Lumen.Views.Dialogs;
 using NovaLink.Lumen.Views.Pages;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -27,12 +33,24 @@ namespace NovaLink.Lumen.Views;
 public sealed partial class ShellPage : Page
 {
     private string _active = "home";
+    private readonly List<Button> _pluginNavButtons = new();
+    private readonly List<(string Title, string Message, string Level)> _pluginNotices = new();
+    private int _toastToken;
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? _dockTimer;
     private bool _rootSwitching;
     private Microsoft.UI.Xaml.Media.Animation.Storyboard? _rootSwitchSpin;
     private readonly BackgroundMusicService _music;
+    private bool _musicProgressSyncing;
+    private bool _musicVolumeSyncing;
+    private bool _musicVolumeDirty;
+    private bool _musicUiReady;
     private MediaPlayer? _backgroundVideoPlayer;
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? _musicPulseTimer;
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? _musicProgressTimer;
+    private bool _musicDetailOpen;
+    private bool _musicDetailPinned;
+    private GamePhase _lastGamePhase = GamePhase.Idle;
+    private Storyboard? _musicDetailStory;
     public AuroraBackdrop GlassBackdrop => Aurora;
     public BackgroundMusicService Music => _music;
 
@@ -53,6 +71,7 @@ public sealed partial class ShellPage : Page
             try
             {
                 _musicPulseTimer?.Stop();
+                _musicProgressTimer?.Stop();
                 if (_backgroundVideoPlayer is { } player)
                 {
                     player.Pause();
@@ -62,31 +81,170 @@ public sealed partial class ShellPage : Page
                 }
             }
             catch { }
+            PluginUiService.Instance.DetachShell(this);
+            LumenPluginHost.Notice -= OnPluginNotice;
             _music.Dispose();
         };
         SizeChanged += (_, _) => { UpdateTopBar(); LayoutCustomBackground(); };
-        foreach (var button in NavButtons)
-        {
-            Motion.Hover(button, 1.035f, 1f);
-            button.PointerEntered += (_, _) =>
-            {
-                if ((button.Tag as string) == _active) return;
-                button.Background = (Brush)Application.Current.Resources["BrushNavHover"];
-                button.Foreground = (Brush)Application.Current.Resources["BrushText"];
-                if (button.Content is Grid grid && grid.Children.Count > 0 && grid.Children[0] is StackPanel panel)
-                {
-                    if (panel.Children.Count > 0 && panel.Children[0] is Microsoft.UI.Xaml.Shapes.Path icon)
-                        icon.Stroke = (Brush)Application.Current.Resources["BrushText"];
-                    if (panel.Children.Count > 1 && panel.Children[1] is TextBlock label)
-                        label.Foreground = (Brush)Application.Current.Resources["BrushText"];
-                }
-            };
-            button.PointerExited += (_, _) => UpdateNav();
-        }
+        foreach (var button in NavButtons) AttachNavButton(button);
         Motion.RotateOnHover(BrandLogo, 4f, 1.04f);
+
+        // 插件通知（App 层广播）→ 右下角气泡 + 铃铛历史。
+        LumenPluginHost.Notice += OnPluginNotice;
+
+        // 插件在窗口创建之前就已加载完，导航项已排队；这里补渲染一次。
+        PluginUiService.Instance.AttachShell(this);
+
+        // XAML 解析阶段 Slider 的初始 Value 会触发 ValueChanged（此时后面的 TextBlock 还没创建），
+        // 所以所有音乐控件回调都以这个标志为准，构造完成后才允许响应。
+        _musicUiReady = true;
+
+        // 版本徽章走通道信息：测试版显示 "1.5.0 Preview"，正式版显示 "1.5.0"。
+        // 写在这里而不是 XAML，是为了让"当前是不是测试版"只有 LauncherChannelInfo 一个真源。
+        try
+        {
+            VersionChipText.Text = LauncherChannelInfo.DisplayVersion;
+            ToolTipService.SetToolTip(VersionChipText, LauncherChannelInfo.ChannelLabel + " " + LauncherChannelInfo.DisplayVersion);
+        }
+        catch { }
     }
 
-    private Button[] NavButtons => new[] { NavHome, NavVersions, NavDiscover, NavForum, NavLibrary, NavSettings };
+    private Button[] BuiltInNavButtons => new[] { NavHome, NavVersions, NavDiscover, NavForum, NavLibrary, NavSettings };
+
+    private IEnumerable<Button> NavButtons
+    {
+        get
+        {
+            foreach (var button in BuiltInNavButtons) yield return button;
+            foreach (var button in _pluginNavButtons) yield return button;
+        }
+    }
+
+    /// <summary>当前激活的导航 tag（插件页面 retry 之类的场景用得到）。</summary>
+    public string ActiveTag => _active;
+
+    private void AttachNavButton(Button button)
+    {
+        Motion.Hover(button, 1.035f, 1f);
+        button.PointerEntered += (_, _) =>
+        {
+            if ((button.Tag as string) == _active) return;
+            button.Background = (Brush)Application.Current.Resources["BrushNavHover"];
+            var strong = (Brush)Application.Current.Resources["BrushText"];
+            button.Foreground = strong;
+            ApplyNavIconBrush(button, strong);
+        };
+        button.PointerExited += (_, _) => UpdateNav();
+    }
+
+    /// <summary>统一处理内置（Path 描边图标）与插件（FontIcon）两种导航项的着色。</summary>
+    private static void ApplyNavIconBrush(Button button, Brush brush)
+    {
+        if (button.Content is not Grid grid || grid.Children.Count == 0 || grid.Children[0] is not StackPanel panel) return;
+
+        if (panel.Children.Count > 0)
+        {
+            switch (panel.Children[0])
+            {
+                case Microsoft.UI.Xaml.Shapes.Path path:
+                    path.Stroke = brush;
+                    break;
+                case FontIcon icon:
+                    icon.Foreground = brush;
+                    break;
+            }
+        }
+
+        if (panel.Children.Count > 1 && panel.Children[1] is TextBlock label) label.Foreground = brush;
+    }
+
+    // ------------------------------------------------------------------
+    // 插件导航项注入（由 PluginUiService 在插件登记完成后调用）
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// 用插件登记的导航项重建「插件区」。内置导航永不被顶掉，插件项追加在下面。
+    /// 可在任意线程调用：非 UI 线程会排队到 UI 线程执行。
+    /// </summary>
+    public void SetPluginNavigation(IReadOnlyList<PluginNavItem> items)
+    {
+        if (!DispatcherQueue.HasThreadAccess)
+        {
+            DispatcherQueue.TryEnqueue(() => SetPluginNavigation(items));
+            return;
+        }
+
+        foreach (var old in _pluginNavButtons) NavItemsPanel.Children.Remove(old);
+        _pluginNavButtons.Clear();
+
+        if (items is { Count: > 0 })
+        {
+            foreach (var item in items)
+            {
+                var button = CreatePluginNavButton(item);
+                NavItemsPanel.Children.Add(button);
+                _pluginNavButtons.Add(button);
+            }
+        }
+
+        UpdateNav();
+    }
+
+    private Button CreatePluginNavButton(PluginNavItem item)
+    {
+        var icon = new FontIcon
+        {
+            Glyph = string.IsNullOrWhiteSpace(item.Glyph) ? "\uE8F1" : item.Glyph!,
+            FontSize = 22,
+            Margin = new Thickness(0, 0, 0, 6),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        var label = new TextBlock
+        {
+            Text = string.IsNullOrWhiteSpace(item.Title) ? "插件" : item.Title!,
+            FontSize = 10,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            LineHeight = 12,
+            LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
+            TextAlignment = TextAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0),
+            Padding = new Thickness(0),
+            MaxWidth = 64,
+            TextTrimming = TextTrimming.CharacterEllipsis
+        };
+
+        var stack = new StackPanel
+        {
+            Orientation = Orientation.Vertical,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        stack.Children.Add(icon);
+        stack.Children.Add(label);
+
+        var grid = new Grid { Width = 64, Height = 64, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        grid.Children.Add(stack);
+
+        var button = new Button
+        {
+            Tag = item.Tag,
+            Content = grid,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            Style = (Style)Application.Current.Resources["NavButton"]
+        };
+
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(button, "NavPlugin_" + item.Tag.Replace(':', '_').Replace('.', '_'));
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, string.IsNullOrWhiteSpace(item.Title) ? "插件" : item.Title!);
+        ToolTipService.SetToolTip(button, string.IsNullOrWhiteSpace(item.Title) ? item.Tag : item.Title);
+        button.Click += Nav_Click;
+        AttachNavButton(button);
+        return button;
+    }
 
     public void ApplyTheme(bool light)
     {
@@ -214,6 +372,16 @@ public sealed partial class ShellPage : Page
         _musicPulseTimer.IsRepeating = true;
         _musicPulseTimer.Tick += (_, _) => Aurora.SetMusicSpectrum(_music.GetSpectrum());
         _musicPulseTimer.Start();
+
+        // 音乐台详情区的进度刷新：450ms 一次即可，比频谱的 50ms 定时器轻得多。
+        if (_musicProgressTimer is null)
+        {
+            _musicProgressTimer = DispatcherQueue.CreateTimer();
+            _musicProgressTimer.Interval = TimeSpan.FromMilliseconds(450);
+            _musicProgressTimer.IsRepeating = true;
+            _musicProgressTimer.Tick += (_, _) => RefreshMusicProgress();
+        }
+        _musicProgressTimer.Start();
     }
 
     public void ApplyBackgroundAndMusic()
@@ -351,7 +519,12 @@ public sealed partial class ShellPage : Page
     {
         var has = _music.HasTracks;
         MusicDock.Visibility = has ? Visibility.Visible : Visibility.Collapsed;
-        if (!has) return;
+        if (!has)
+        {
+            // 曲目被清空时顺手把悬停详情收回去，避免下次显示时停在展开态。
+            ResetMusicDetail();
+            return;
+        }
         MusicTitle.Text = _music.CurrentTitle;
         MusicSubtitle.Text = _music.Tracks.Count + " 首 · " + BackgroundMusicService.ModeLabel(_music.Mode);
         MusicPlayIcon.Glyph = _music.IsPlaying ? "" : "";
@@ -362,6 +535,7 @@ public sealed partial class ShellPage : Page
             _ => ""
         };
         ToolTipService.SetToolTip(MusicModeButton, "播放方式：" + BackgroundMusicService.ModeLabel(_music.Mode));
+        RefreshMusicProgress();
     }
 
     private void MusicToggle_Click(object sender, RoutedEventArgs e) => _music.Toggle();
@@ -376,10 +550,298 @@ public sealed partial class ShellPage : Page
         UpdateMusicDock();
     }
 
+    // ---- 音乐台：悬停放大 + 详情区（进度、时间、第几首、播放方式、音量）----
+
+    private void MusicDock_PointerEntered(object sender, PointerRoutedEventArgs e) => SetMusicDetailOpen(true);
+
+    /// <summary>
+    /// 移出就收起，但**拖动进度/音量时不能收**：按住鼠标往两边拖，指针很容易瞬间离开音乐台，
+    /// 一离开就塌回去会让滑块看起来「一拖就没」。
+    /// </summary>
+    private void MusicDock_PointerExited(object sender, PointerRoutedEventArgs e)
+    {
+        // 拖动时指针跟着走，松手落到浮层外面也会先收到一次 Exited；正在拖就一律不收起。
+        if (e.Pointer.IsInContact) return;
+        // 点击展开的是「钉住」状态：鼠标移开不收起，再点一下音乐台才关，避免拖完滑块一松手就塌掉。
+        if (_musicDetailPinned) return;
+        SetMusicDetailOpen(false);
+    }
+
+    /// <summary>
+    /// 点一下音乐台也能展开/收起详情：悬停展开在触屏和部分鼠标/远程桌面场景下不一定触发，
+    /// 给一个明确的点击入口，进度条与音量就不会「看不见也点不到」。
+    /// 详情区内部的点击（滑块、播放按钮、音量）不算「点音乐台」——否则点一下滑块会把整个浮层关掉，
+    /// 这就是「拖动条根本用不了」的直接原因。
+    /// </summary>
+    private void MusicDock_Tapped(object sender, TappedRoutedEventArgs e)
+    {
+        if (IsInsideDetail(e.OriginalSource)) return;
+        if (_musicDetailOpen && _musicDetailPinned)
+        {
+            _musicDetailPinned = false;
+            SetMusicDetailOpen(false);
+            return;
+        }
+        _musicDetailPinned = true;
+        SetMusicDetailOpen(true);
+    }
+
+    private bool IsInsideDetail(object? source)
+    {
+        var node = source as DependencyObject;
+        while (node is not null)
+        {
+            if (ReferenceEquals(node, MusicDetail) || node is Button) return true;
+            node = VisualTreeHelper.GetParent(node);
+        }
+        return false;
+    }
+
+    private void SetMusicDetailOpen(bool open)
+    {
+        if (_musicDetailOpen == open) return;
+        _musicDetailOpen = open;
+        if (open)
+        {
+            // 详情区必须可点击：之前这里一直是 IsHitTestVisible=False，进度条与音量都点不动。
+            MusicDetail.IsHitTestVisible = true;
+            RefreshMusicProgress();
+        }
+        else
+        {
+            MusicDetail.IsHitTestVisible = false;
+            PersistMusicVolume();
+        }
+
+        AnimateMusicDetail(open);
+        AnimateMusicDockScale(open ? 1.05 : 1, open ? 180 : 150);
+    }
+
+    /// <summary>
+    /// 展开/收起是「一段」动画，不是「内容先消失、外框后塌」两段。
+    /// 旧实现收起时只淡出内容，等淡出动画结束后才把 Visibility 设成 Collapsed，
+    /// 于是进度条与音量先没了、玻璃框再跳一下，视觉上被切成两截。
+    /// 现在高度和透明度走同一条时间线：框一边缩、内容一边淡出。
+    /// </summary>
+    private void AnimateMusicDetail(bool open)
+    {
+        _musicDetailStory?.Stop();
+        _musicDetailStory = null;
+
+        if (open)
+        {
+            MusicDetail.Visibility = Visibility.Visible;
+            MusicDetail.Height = double.NaN;
+            MusicDetail.UpdateLayout();
+            var target = MusicDetail.ActualHeight;
+
+            MusicDetail.Opacity = 0;
+            MusicDetailShift.Y = 8;
+
+            if (target < 1)
+            {
+                // 首次布局还没算出来高度：只淡入，不硬做高度动画（宁可少一段，也不要闪一下）。
+                var fade = new Storyboard();
+                AddMusicDetailAnimation(fade, MusicDetail, "Opacity", 0, 1, 140, 0, MusicEaseOut());
+                fade.Begin();
+                return;
+            }
+
+            MusicDetail.Height = 0;
+            var story = new Storyboard();
+            AddMusicDetailAnimation(story, MusicDetail, "Height", 0, target, 180, 0, MusicEaseOut());
+            AddMusicDetailAnimation(story, MusicDetail, "Opacity", 0, 1, 140, 30, MusicEaseOut());
+            AddMusicDetailAnimation(story, MusicDetailShift, "Y", 8, 0, 180, 0, MusicEaseOut());
+            story.Completed += (_, _) =>
+            {
+                if (!_musicDetailOpen) return;
+                story.Stop();
+                MusicDetail.Height = double.NaN;
+                MusicDetail.Opacity = 1;
+                MusicDetailShift.Y = 0;
+            };
+            _musicDetailStory = story;
+            story.Begin();
+            return;
+        }
+
+        var current = MusicDetail.ActualHeight;
+        if (current < 1)
+        {
+            MusicDetail.Visibility = Visibility.Collapsed;
+            MusicDetail.Height = double.NaN;
+            MusicDetail.Opacity = 0;
+            MusicDetailShift.Y = 8;
+            return;
+        }
+
+        // 固定住当前高度，变成可以过渡的确定值。
+        MusicDetail.Height = current;
+        var closing = new Storyboard();
+        AddMusicDetailAnimation(closing, MusicDetail, "Height", current, 0, 160, 0, MusicEaseInOut());
+        AddMusicDetailAnimation(closing, MusicDetail, "Opacity", 1, 0, 160, 0, MusicEaseInOut());
+        AddMusicDetailAnimation(closing, MusicDetailShift, "Y", 0, 8, 160, 0, MusicEaseInOut());
+        closing.Completed += (_, _) =>
+        {
+            if (_musicDetailOpen) return;
+            closing.Stop();
+            MusicDetail.Visibility = Visibility.Collapsed;
+            MusicDetail.Height = double.NaN;
+            MusicDetail.Opacity = 0;
+            MusicDetailShift.Y = 8;
+        };
+        _musicDetailStory = closing;
+        closing.Begin();
+    }
+
+    private void ResetMusicDetail()
+    {
+        _musicDetailOpen = false;
+        _musicDetailPinned = false;
+        _musicDetailStory?.Stop();
+        _musicDetailStory = null;
+        MusicDetail.Visibility = Visibility.Collapsed;
+        MusicDetail.Height = double.NaN;
+        MusicDetail.Opacity = 0;
+        MusicDetailShift.Y = 8;
+    }
+
+    private void AnimateMusicDockScale(double to, int durationMs)
+    {
+        var story = new Storyboard();
+        AddMusicDockScale(story, to, durationMs, to > 1 ? MusicEaseOut() : MusicEaseInOut());
+        story.Begin();
+    }
+
+    private static EasingFunctionBase MusicEaseOut() => new CubicEase { EasingMode = EasingMode.EaseOut };
+
+    private static EasingFunctionBase MusicEaseInOut() => new CubicEase { EasingMode = EasingMode.EaseInOut };
+
+    private void AddMusicDockScale(Storyboard story, double to, int durationMs, EasingFunctionBase ease)
+    {
+        AddMusicDetailAnimation(story, MusicDockScale, "ScaleX", 1, to, durationMs, 0, ease);
+        AddMusicDetailAnimation(story, MusicDockScale, "ScaleY", 1, to, durationMs, 0, ease);
+    }
+
+    private static void AddMusicDetailAnimation(Storyboard story, DependencyObject target, string property,
+        double from, double to, int durationMs, int delayMs, EasingFunctionBase ease)
+    {
+        var animation = new DoubleAnimation
+        {
+            From = from,
+            To = to,
+            Duration = new Duration(TimeSpan.FromMilliseconds(durationMs)),
+            BeginTime = TimeSpan.FromMilliseconds(delayMs),
+            EasingFunction = ease,
+            EnableDependentAnimation = true
+        };
+        Storyboard.SetTarget(animation, target);
+        Storyboard.SetTargetProperty(animation, property);
+        story.Children.Add(animation);
+    }
+
+    /// <summary>把当前播放进度、时间与曲目信息写进详情区；没有曲目时进度归零、时间显示 00:00 / 00:00。</summary>
+    private void RefreshMusicProgress()
+    {
+        if (!_musicUiReady) return;
+        if (MusicDock.Visibility != Visibility.Visible) return;
+
+        var duration = _music.Duration;
+        var position = _music.Position;
+        if (duration <= TimeSpan.Zero)
+        {
+            duration = TimeSpan.Zero;
+            position = TimeSpan.Zero;
+        }
+        else if (position > duration)
+        {
+            position = duration;
+        }
+        if (position < TimeSpan.Zero) position = TimeSpan.Zero;
+
+        // 程序回写滑块时要屏蔽 ValueChanged，否则拖动/播放会被自己打断。
+        _musicProgressSyncing = true;
+        try
+        {
+            MusicProgress.Value = duration > TimeSpan.Zero ? position.TotalSeconds / duration.TotalSeconds : 0;
+            _musicVolumeSyncing = true;
+            try
+            {
+                var volume = Math.Clamp(_music.Volume, 0, 1);
+                MusicVolume.Value = volume;
+                MusicVolumeText.Text = (int)Math.Round(volume * 100) + "%";
+            }
+            finally { _musicVolumeSyncing = false; }
+        }
+        finally { _musicProgressSyncing = false; }
+        MusicTimeText.Text = FormatMusicTime(position) + " / " + FormatMusicTime(duration);
+        MusicMetaText.Text = BuildMusicMeta();
+    }
+
+    /// <summary>拖动进度条：按当前曲目总时长换算成秒并跳转，播放状态保持不变。</summary>
+    private void MusicProgress_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
+    {
+        if (!_musicUiReady || _musicProgressSyncing) return;
+        var duration = _music.Duration;
+        if (duration <= TimeSpan.Zero)
+        {
+            RefreshMusicProgress();
+            return;
+        }
+        var target = TimeSpan.FromSeconds(Math.Clamp(e.NewValue, 0, 1) * duration.TotalSeconds);
+        _music.Seek(target);
+        MusicTimeText.Text = FormatMusicTime(target) + " / " + FormatMusicTime(duration);
+    }
+
+    /// <summary>拖动音量：立刻作用于播放器；真正落盘等悬停收起时一次写完，避免拖动过程频繁写盘。</summary>
+    private void MusicVolume_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
+    {
+        if (!_musicUiReady || _musicVolumeSyncing) return;
+        // 取两位小数：MediaPlayer.Volume 内部按 float 存，不取整会把 0.35 写成 0.34999999…
+        var volume = Math.Round(Math.Clamp(e.NewValue, 0, 1), 2);
+        _music.Volume = volume;
+        MusicVolumeText.Text = (int)Math.Round(volume * 100) + "%";
+        _musicVolumeDirty = true;
+    }
+
+    private void PersistMusicVolume()
+    {
+        if (!_musicVolumeDirty) return;
+        _musicVolumeDirty = false;
+        try
+        {
+            var settings = LumenRuntime.Settings.Settings;
+            settings.MusicVolume = Math.Round(Math.Clamp(_music.Volume, 0, 1), 2);
+            LumenRuntime.Settings.Save();
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("music", "保存音量失败：" + ex.Message);
+        }
+    }
+
+    private string BuildMusicMeta()
+    {
+        var count = _music.TrackCount;
+        var index = _music.TrackIndex;
+        var track = count == 0 || index < 0 ? "暂无曲目" : "第 " + (index + 1) + " / " + count + " 首";
+        return track + " · " + BackgroundMusicService.ModeLabel(_music.Mode);
+    }
+
+    private static string FormatMusicTime(TimeSpan value)
+    {
+        if (value < TimeSpan.Zero) value = TimeSpan.Zero;
+        var minutes = (int)value.TotalMinutes;
+        return minutes.ToString("00") + ":" + value.Seconds.ToString("00");
+    }
+
     private void UpdateTopBar()
     {
-        var compact = ActualWidth < 1180;
-        SearchShell.Width = compact ? 286 : 372;
+        // 顶栏改成两列后这里只管「搜索框最多多宽」：窄窗口或游戏运行时压窄搜索框，
+        // 并把右侧不关键的 Java 胶囊 / Ctrl K 提示让出来，保证状态条永远不和搜索框重叠。
+        var gameActive = GameStatusChip.Visibility == Visibility.Visible;
+        var compact = ActualWidth < 1180 || gameActive;
+        SearchShell.MaxWidth = compact ? 286 : 372;
         JavaChip.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
         SearchShortcut.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
     }
@@ -438,7 +900,10 @@ public sealed partial class ShellPage : Page
     public void Navigate(string tag, bool force = false)
     {
         _active = tag;
-        var type = tag switch
+
+        // 插件页面全部复用 PluginPageHost，靠导航参数区分是哪一个插件。
+        var isPlugin = tag.StartsWith("plugin:", StringComparison.Ordinal);
+        var type = isPlugin ? typeof(PluginPageHost) : tag switch
         {
             "versions" => typeof(VersionsPage),
             "discover" => typeof(DiscoverPage),
@@ -447,12 +912,13 @@ public sealed partial class ShellPage : Page
             "settings" => typeof(SettingsPage),
             _ => typeof(HomePage)
         };
-        if (force || ContentFrame.CurrentSourcePageType != type)
+        // 两个插件页面之间切换时页面类型相同，不能走上面的去重判断，必须强制导航。
+        if (force || isPlugin || ContentFrame.CurrentSourcePageType != type)
         {
             // 背景与页面用同一条时间线一起淡入，避免只有底层先出现。
             Backdrop.Opacity = 0.15;
             ContentFrame.Opacity = 0.15;
-            ContentFrame.Navigate(type, null, new Microsoft.UI.Xaml.Media.Animation.SuppressNavigationTransitionInfo());
+            ContentFrame.Navigate(type, isPlugin ? tag : null, new Microsoft.UI.Xaml.Media.Animation.SuppressNavigationTransitionInfo());
             BeginStageFade();
         }
         UpdateNav();
@@ -630,14 +1096,9 @@ public sealed partial class ShellPage : Page
                 : new SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0));
             button.BorderBrush = on ? (Brush)Application.Current.Resources["BrushNavSelectedBorder"] : null;
             button.BorderThickness = on ? new Thickness(1) : new Thickness(0);
-            button.Foreground = (Brush)Application.Current.Resources[on ? "BrushMint" : "BrushTextSecondary"];
-            if (button.Content is Grid grid && grid.Children.Count > 0 && grid.Children[0] is StackPanel panel)
-            {
-                if (panel.Children.Count > 0 && panel.Children[0] is Microsoft.UI.Xaml.Shapes.Path icon)
-                    icon.Stroke = (Brush)Application.Current.Resources[on ? "BrushMint" : "BrushTextSecondary"];
-                if (panel.Children.Count > 1 && panel.Children[1] is TextBlock label)
-                    label.Foreground = (Brush)Application.Current.Resources[on ? "BrushMint" : "BrushTextSecondary"];
-            }
+            var foreground = (Brush)Application.Current.Resources[on ? "BrushMint" : "BrushTextSecondary"];
+            button.Foreground = foreground;
+            ApplyNavIconBrush(button, foreground);
         }
     }
 
@@ -819,7 +1280,82 @@ public sealed partial class ShellPage : Page
     private void Activity_Click(object sender, RoutedEventArgs e) => ProgressCenter.OpenOverlay();
 
     private async void Bell_Click(object sender, RoutedEventArgs e)
-        => await ShowAsync("通知", "暂时没有新的通知。");
+    {
+        if (_pluginNotices.Count == 0)
+        {
+            await ShowAsync("通知", "暂时没有新的通知。");
+            return;
+        }
+
+        var recent = _pluginNotices.AsEnumerable().Reverse().Take(12).ToList();
+        var lines = recent.Select(note =>
+            "· " + note.Title + (string.IsNullOrWhiteSpace(note.Message) ? "" : "：" + note.Message));
+        await ShowAsync("通知", string.Join(Environment.NewLine + Environment.NewLine, lines));
+    }
+
+    /// <summary>插件/宿主通知：写日志并浮出气泡；非 UI 线程自动切回 UI 线程。</summary>
+    private void OnPluginNotice(string title, string message, string level)
+    {
+        if (!DispatcherQueue.HasThreadAccess)
+        {
+            DispatcherQueue.TryEnqueue(() => OnPluginNotice(title, message, level));
+            return;
+        }
+
+        try
+        {
+            _pluginNotices.Add((title ?? "", message ?? "", level ?? "info"));
+            if (_pluginNotices.Count > 30) _pluginNotices.RemoveRange(0, _pluginNotices.Count - 30);
+            _ = ShowPluginToastAsync(title ?? "", message ?? "", level ?? "info");
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("plugin-ui", "登记插件通知失败：" + ex.Message);
+        }
+    }
+
+    private async Task ShowPluginToastAsync(string title, string message, string level)
+    {
+        var token = ++_toastToken;
+        try
+        {
+            PluginToastTitle.Text = string.IsNullOrWhiteSpace(title) ? "插件通知" : title;
+            PluginToastBody.Text = message;
+            PluginToastIcon.Glyph = level.ToLowerInvariant() switch
+            {
+                "warn" or "warning" => "",
+                "error" => "",
+                _ => ""
+            };
+            PluginToastIcon.Foreground = (Brush)Application.Current.Resources[
+                level.Equals("error", StringComparison.OrdinalIgnoreCase) ? "BrushDanger" : "BrushMint"];
+
+            PluginToast.Visibility = Visibility.Visible;
+            PluginToast.Opacity = 0;
+            for (var step = 1; step <= 5; step++)
+            {
+                if (token != _toastToken) return;
+                PluginToast.Opacity = step / 5.0;
+                await Task.Delay(22);
+            }
+
+            await Task.Delay(3800);
+            if (token != _toastToken) return;
+
+            for (var step = 5; step >= 0; step--)
+            {
+                if (token != _toastToken) return;
+                PluginToast.Opacity = step / 5.0;
+                await Task.Delay(22);
+            }
+
+            if (token == _toastToken) PluginToast.Visibility = Visibility.Collapsed;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("plugin-ui", "显示插件通知失败：" + ex.Message);
+        }
+    }
 
     private void GameStatusChip_Tapped(object sender, TappedRoutedEventArgs e) => ProgressCenter.OpenOverlay();
 
@@ -833,6 +1369,8 @@ public sealed partial class ShellPage : Page
 
     private void ApplyGameState(GameState state)
     {
+        var wasActive = _lastGamePhase is GamePhase.Preparing or GamePhase.Starting or GamePhase.Running;
+        _lastGamePhase = state.Phase;
         var active = state.Phase is GamePhase.Preparing or GamePhase.Starting or GamePhase.Running;
         GameStatusChip.Visibility = active ? Visibility.Visible : Visibility.Collapsed;
         GameStopButton.Visibility = state.Phase == GamePhase.Running
@@ -849,8 +1387,16 @@ public sealed partial class ShellPage : Page
             GameInstanceText.Text = state.InstanceName;
         }
 
+        UpdateTopBar();
         if (ContentFrame.Content is HomePage home) home.UpdatePlayState(state);
         if (ContentFrame.Content is VersionsPage versions) versions.UpdatePlayState(state);
+
+        // 游戏刚退出：重新扫一次实例，让「上次启动 / 上次游玩」和"按最近启动排序"立刻生效。
+        if (wasActive && state.Phase is GamePhase.Exited or GamePhase.Crashed)
+        {
+            if (ContentFrame.Content is VersionsPage page) page.Reload();
+            else if (ContentFrame.Content is HomePage hero) hero.Reload();
+        }
     }
 
     private void RefreshProgressDock()

@@ -14,7 +14,7 @@
         <StackPanel Margin="4,10,4,0" Spacing="4">
             <TextBlock Text="PREFERENCES" Style="{StaticResource TextEyebrow}" />
             <TextBlock Text="设置" Style="{StaticResource TextPageTitle}" />
-            <TextBlock Text="账户、游戏运行时、内存与关于。" Style="{StaticResource TextBody}" />
+            <TextBlock Text="账户、游戏运行时、外观、插件与关于。" Style="{StaticResource TextBody}" />
         </StackPanel>
 
         <Grid Grid.Row="1" Margin="0,22,0,0" ColumnSpacing="16">
@@ -42,12 +42,28 @@
                             <TextBlock Text="游戏与 Java" FontSize="13.5" />
                         </StackPanel>
                     </Button>
+                    <Button x:Name="CategoryPlugins" Tag="plugins" Click="Category_Click"
+                            Style="{StaticResource GhostButton}" HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Left" Padding="14,0" Height="46">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <FontIcon Glyph="&#xE943;" FontSize="16" />
+                            <TextBlock Text="插件" FontSize="13.5" />
+                        </StackPanel>
+                    </Button>
                     <Button x:Name="CategoryAppearance" Tag="appearance" Click="Category_Click"
                             Style="{StaticResource GhostButton}" HorizontalAlignment="Stretch"
                             HorizontalContentAlignment="Left" Padding="14,0" Height="46">
                         <StackPanel Orientation="Horizontal" Spacing="10">
                             <FontIcon Glyph="&#xE790;" FontSize="16" />
                             <TextBlock Text="外观与性能" FontSize="13.5" />
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="CategoryExperimental" Tag="experimental" Click="Category_Click"
+                            Style="{StaticResource GhostButton}" HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Left" Padding="14,0" Height="46">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <FontIcon Glyph="&#xE7B8;" FontSize="16" />
+                            <TextBlock Text="实验性" FontSize="13.5" />
                         </StackPanel>
                     </Button>
                     <Button x:Name="CategoryAbout" Tag="about" Click="Category_Click"
@@ -63,7 +79,7 @@
                 </StackPanel>
             </Border>
 
-            <ScrollViewer x:Name="SettingsScroll" Grid.Column="1" VerticalScrollBarVisibility="Auto" Padding="0,0,6,20" IsScrollInertiaEnabled="False" ViewChanging="SettingsScroll_ViewChanging" ViewChanged="SettingsScroll_ViewChanged">
+            <ScrollViewer x:Name="SettingsScroll" Grid.Column="1" Style="{StaticResource PageScroll}" Padding="0,0,12,20" IsScrollInertiaEnabled="False" ViewChanging="SettingsScroll_ViewChanging" ViewChanged="SettingsScroll_ViewChanged">
                 <Grid x:Name="SettingsPanelHost">
                     <StackPanel x:Name="AccountsPanel" Spacing="16">
                         <Border Style="{StaticResource GlassCard}">
@@ -220,6 +236,126 @@
                                 <TextBox x:Name="JavaArgsBox" Style="{StaticResource FieldBox}" PlaceholderText="-XX:+UseG1GC ..." />
                                 <Button x:Name="SaveRuntimeButton" Content="保存运行时设置" Style="{StaticResource AccentButton}"
                                         Width="190" Height="40" HorizontalAlignment="Left" Click="SaveRuntime_Click" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
+                    <StackPanel x:Name="PluginsPanel" Spacing="16" Visibility="Collapsed">
+                        <!-- 插件属于实验性功能：开启后这里才会出现，顶部固定一条说明。 -->
+                        <Border x:Name="PluginsExperimentalBanner" Padding="14,12" CornerRadius="14"
+                                Background="#1FA996FF" BorderBrush="#55A996FF" BorderThickness="1">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE7B8;" FontSize="13" Foreground="{StaticResource BrushMint}" VerticalAlignment="Center" />
+                                <TextBlock Style="{StaticResource TextSmall}" TextWrapping="Wrap" VerticalAlignment="Center"
+                                           Text="实验性功能：插件系统仍在打磨中，可能影响启动器稳定性。出问题时可以到「实验性」页关掉它。" />
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource GlassCard}">
+                            <StackPanel Spacing="12">
+                                <Grid>
+                                    <StackPanel>
+                                        <TextBlock Text="插件" Style="{StaticResource TextSectionTitle}" />
+                                        <TextBlock Text="扩展启动器的功能。插件由你自行安装，加载失败时只会影响它自己。"
+                                                   Style="{StaticResource TextSmall}" Margin="0,4,0,0" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" VerticalAlignment="Top">
+                                        <Button x:Name="InstallPluginButton" AutomationProperties.AutomationId="SettingsInstallPlugin"
+                                                Content="安装插件包…" Style="{StaticResource GhostButton}"
+                                                Height="34" Padding="12,0" Click="InstallPlugin_Click" />
+                                        <Button x:Name="OpenPluginsFolderButton" AutomationProperties.AutomationId="SettingsOpenPluginsFolder"
+                                                Content="打开插件目录" Style="{StaticResource GhostButton}"
+                                                Height="34" Padding="12,0" Click="OpenPluginsFolder_Click" />
+                                        <Button x:Name="RefreshPluginsButton" AutomationProperties.AutomationId="SettingsRefreshPlugins"
+                                                Content="刷新" Style="{StaticResource GhostButton}"
+                                                Height="34" Padding="12,0" Click="RefreshPlugins_Click" />
+                                    </StackPanel>
+                                </Grid>
+
+                                <Border x:Name="SafeModeBanner" Visibility="Collapsed" Padding="14,12" CornerRadius="14"
+                                        Background="{StaticResource BrushWarnSoft}" BorderBrush="#66FFB86B" BorderThickness="1">
+                                    <StackPanel Spacing="8">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <FontIcon Glyph="&#xE7BA;" FontSize="14" Foreground="{StaticResource BrushWarn}" VerticalAlignment="Center" />
+                                            <TextBlock Text="本次启动以安全模式运行，所有插件已停用" FontSize="13" FontWeight="SemiBold"
+                                                       Foreground="{StaticResource BrushWarn}" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                        <TextBlock x:Name="SafeModeReasonText" Style="{StaticResource TextSmall}" TextWrapping="Wrap" />
+                                        <Button x:Name="ReenablePluginsButton" AutomationProperties.AutomationId="SettingsReenablePlugins"
+                                                Content="重新启用插件并重启" Style="{StaticResource AccentButton}"
+                                                Height="36" Padding="14,0" HorizontalAlignment="Left" Click="ReenablePlugins_Click" />
+                                    </StackPanel>
+                                </Border>
+
+                                <StackPanel x:Name="PluginList" Spacing="8" />
+
+                                <Border x:Name="EmptyPlugins" Visibility="Collapsed" Padding="18" CornerRadius="16"
+                                        Background="{StaticResource BrushFillSoft}" BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1">
+                                    <StackPanel Spacing="6">
+                                        <TextBlock Text="插件列表是空的" FontSize="13.5" />
+                                        <TextBlock x:Name="EmptyPluginsText" Style="{StaticResource TextSmall}" TextWrapping="Wrap" />
+                                        <Button x:Name="OpenPluginsFolderEmptyButton" Content="打开插件目录"
+                                                Style="{StaticResource GhostButton}" Height="32" Padding="12,0"
+                                                HorizontalAlignment="Left" Click="OpenPluginsFolder_Click" />
+                                    </StackPanel>
+                                </Border>
+
+                                <TextBlock x:Name="PluginsHintText" Style="{StaticResource TextSmall}" TextWrapping="Wrap" Visibility="Collapsed" />
+
+                                <Border Height="1" Background="{StaticResource BrushBorderSubtle}" Margin="0,4" />
+
+                                <Grid ColumnSpacing="16">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="开发模式" FontSize="13.5" FontWeight="SemiBold" />
+                                        <TextBlock Text="开启后会展开下面的开发者工具，可以直接把插件源码目录打包成插件包。"
+                                                   Style="{StaticResource TextSmall}" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                    <ToggleSwitch x:Name="DevModeSwitch" Grid.Column="1" VerticalAlignment="Center"
+                                                  OnContent="已开启" OffContent="已关闭" Toggled="DevMode_Toggled" />
+                                </Grid>
+
+                                <StackPanel x:Name="DevToolsPanel" Spacing="10" Visibility="Collapsed">
+                                    <Border Height="1" Background="{StaticResource BrushBorderSubtle}" Margin="0,4" />
+                                    <Grid ColumnSpacing="12">
+                                        <TextBlock Text="开发者工具" Style="{StaticResource TextEyebrow}" VerticalAlignment="Center" />
+                                        <Border Style="{StaticResource Pill}" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                            <TextBlock Text="仅开发模式" FontSize="12" />
+                                        </Border>
+                                    </Grid>
+                                    <TextBlock Style="{StaticResource TextBody}" TextWrapping="Wrap"
+                                               Text="选一个插件源码目录，直接打包成 .lumenplugin 并安装到插件目录。目录里需要有 plugin.json；有 build.ps1 就走你的脚本，没有就用 dotnet build 自动打包。" />
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <Button x:Name="DevBuildButton" Content="选择源码目录并打包…"
+                                                Style="{StaticResource GhostButton}" Height="34" Padding="12,0"
+                                                Click="DevBuild_Click" AutomationProperties.AutomationId="SettingsDevBuild" />
+                                        <Button x:Name="DevBuildOpenButton" Content="打开产物目录"
+                                                Style="{StaticResource GhostButton}" Height="34" Padding="12,0"
+                                                Click="DevBuildOpen_Click" IsEnabled="False"
+                                                AutomationProperties.AutomationId="SettingsDevBuildOpen" />
+                                    </StackPanel>
+                                    <TextBlock x:Name="DevBuildStatus" Style="{StaticResource TextBody}" TextWrapping="Wrap" Visibility="Collapsed" />
+                                    <StackPanel x:Name="DevBuildLogPanel" Spacing="6" Visibility="Collapsed">
+                                        <TextBlock Text="构建输出" Style="{StaticResource TextSmall}" />
+                                        <ScrollViewer MaxHeight="170" VerticalScrollBarVisibility="Auto">
+                                            <TextBlock x:Name="DevBuildLog" FontFamily="Consolas" FontSize="11" TextWrapping="Wrap" />
+                                        </ScrollViewer>
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Style="{StaticResource TextSmall}" TextWrapping="Wrap" VerticalAlignment="Center"
+                                               Text="安全提示：只安装可信来源的插件。插件运行在启动器进程内，请只使用你信任的插件。" />
+                                    <Button x:Name="PluginDocsButton" Grid.Column="1" AutomationProperties.AutomationId="SettingsPluginDocs"
+                                            Content="插件文档" Style="{StaticResource GhostButton}"
+                                            Height="32" Padding="12,0" VerticalAlignment="Center" Click="PluginDocs_Click" />
+                                </Grid>
                             </StackPanel>
                         </Border>
                     </StackPanel>
@@ -457,6 +593,71 @@
                         </Border>
                     </StackPanel>
 
+                    <StackPanel x:Name="ExperimentalPanel" Spacing="16" Visibility="Collapsed">
+                        <Border Style="{StaticResource GlassCard}">
+                            <StackPanel Spacing="14">
+                                <StackPanel>
+                                    <TextBlock Text="实验性功能" Style="{StaticResource TextSectionTitle}" />
+                                    <TextBlock Style="{StaticResource TextSmall}" Margin="0,4,0,0" TextWrapping="Wrap"
+                                               Text="这些功能还在打磨中，可能随版本变化甚至移除。默认关闭，改动后需要重启启动器才会生效。" />
+                                </StackPanel>
+
+                                <Border Height="1" Background="{StaticResource BrushBorderSubtle}" Margin="0,2" />
+
+                                <Grid ColumnSpacing="16">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Spacing="4">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <TextBlock Text="启动器插件" FontSize="13.5" FontWeight="SemiBold" />
+                                            <Border Style="{StaticResource Pill}">
+                                                <TextBlock Text="实验性" FontSize="11" />
+                                            </Border>
+                                        </StackPanel>
+                                        <TextBlock x:Name="ExperimentalPluginsHint" Style="{StaticResource TextSmall}" TextWrapping="Wrap"
+                                                   Text="插件可以给启动器加页面、改下载来源、改界面文字。开启后才会出现「插件」设置页与发现页的「启动器插件」商店。" />
+                                    </StackPanel>
+                                    <ToggleSwitch x:Name="ExperimentalPluginsSwitch" Grid.Column="1" VerticalAlignment="Center"
+                                                  AutomationProperties.AutomationId="SettingsExperimentalPlugins"
+                                                  OnContent="已开启" OffContent="已关闭" Toggled="ExperimentalPlugins_Toggled" />
+                                </Grid>
+
+                                <Border x:Name="ExperimentalRestartBanner" Visibility="Collapsed" Padding="14,12" CornerRadius="14"
+                                        Background="{StaticResource BrushWarnSoft}" BorderBrush="#66FFB86B" BorderThickness="1">
+                                    <Grid ColumnSpacing="12">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                            <FontIcon Glyph="&#xE7BA;" FontSize="14" Foreground="{StaticResource BrushWarn}" VerticalAlignment="Center" />
+                                            <TextBlock Text="设置已保存，重启启动器后生效。" FontSize="13" Foreground="{StaticResource BrushWarn}"
+                                                       VerticalAlignment="Center" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                        <Button x:Name="ExperimentalRestartButton" Grid.Column="1" Content="立即重启"
+                                                Style="{StaticResource AccentButton}" Height="34" Padding="14,0"
+                                                AutomationProperties.AutomationId="SettingsExperimentalRestart"
+                                                Click="ExperimentalRestart_Click" />
+                                    </Grid>
+                                </Border>
+
+                                <TextBlock x:Name="ExperimentalPluginsStateText" Style="{StaticResource TextSmall}" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource GlassCard}">
+                            <StackPanel Spacing="10">
+                                <TextBlock Text="关于实验性功能" Style="{StaticResource TextSectionTitle}" />
+                                <TextBlock Style="{StaticResource TextBody}" TextWrapping="Wrap"
+                                           Text="实验性功能默认关闭。关闭时启动器不会加载任何插件：发现页的「启动器插件」商店、设置里的「插件」页与插件导航都不会出现，插件留在磁盘上的文件与设置不会被删除。" />
+                                <TextBlock Style="{StaticResource TextSmall}" TextWrapping="Wrap"
+                                           Text="开启后仍然受安全模式与看门狗保护：连续两次在加载插件时崩溃会自动回到安全模式，单个插件加载失败只会禁用它自己。" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
                     <StackPanel x:Name="AboutPanel" Spacing="16" Visibility="Collapsed">
                         <Border Style="{StaticResource GlassCard}">
                             <StackPanel Spacing="14">
@@ -482,8 +683,19 @@
                         <Border Style="{StaticResource GlassCard}">
                             <StackPanel Spacing="8">
                                 <TextBlock Text="版本策略" Style="{StaticResource TextSectionTitle}" />
-                                <TextBlock Text="NovaLink Lumen V1.4.0。升级会保留账户、皮肤、实例与游戏目录，卸载时会单独询问是否删除启动器数据。"
+                                <TextBlock Text="升级前会自动把数据备份到 Data_Backup_v1.4.0，账户、皮肤、实例与游戏目录都会保留；卸载时会单独询问是否删除启动器数据。"
                                            Style="{StaticResource TextBody}" />
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource GlassCard}">
+                            <StackPanel Spacing="12">
+                                <TextBlock Text="数据备份与恢复" Style="{StaticResource TextSectionTitle}" />
+                                <TextBlock Text="每次升级到新版本前，启动器会先把旧数据完整备份到数据目录旁边的 Data_Backup_v&lt;版本&gt;。升级后如果账户、实例或界面出问题，可以在这里一键换回升级前的数据；当前数据会被改名保留，不会删除。"
+                                           Style="{StaticResource TextBody}" TextWrapping="Wrap" />
+                                <TextBlock x:Name="BackupStatusText" Style="{StaticResource TextSmall}" TextWrapping="Wrap" />
+                                <Button x:Name="RestoreBackupButton" AutomationProperties.AutomationId="SettingsRestoreBackup"
+                                        Content="从升级前的备份恢复" Style="{StaticResource GhostButton}"
+                                        Height="40" Padding="14,0" Click="RestoreBackup_Click" />
                             </StackPanel>
                         </Border>
                     </StackPanel>

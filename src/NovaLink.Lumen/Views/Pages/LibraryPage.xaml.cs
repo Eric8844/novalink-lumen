@@ -8,11 +8,15 @@ using System.Numerics;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Media.Imaging;
+using Rectangle = Microsoft.UI.Xaml.Shapes.Rectangle;
+using NovaLink.Lumen.Controls;
 using NovaLink.Lumen.Core.Models;
 using NovaLink.Lumen.Services;
 using NovaLink.Lumen.Services.Modrinth;
@@ -31,19 +35,38 @@ public sealed partial class LibraryPage : Page
     private LibrarySnapshot? _snapshot;
     private LibraryOverview? _overview;
     private bool _bulkGuard;
+    private LoadingState? _loading;
+    private int _renderVersion;
+    private FileSystemWatcher? _watcher;
+    private DispatcherQueueTimer? _watchDebounce;
 
     public LibraryPage()
     {
         InitializeComponent();
+        _loading = LoadingState.Attach(LoadingHost, "正在读取库…");
+        _loading.Hide();
         Loaded += LibraryPage_Loaded;
+        Unloaded += LibraryPage_Unloaded;
+    }
+
+    private void LibraryPage_Unloaded(object sender, RoutedEventArgs e)
+    {
+        // 页面离开时取消排队中的渲染，并停掉加载动画，别让它在后台继续跑。
+        _renderVersion++;
+        _loading?.Detach();
+        _watcher?.Dispose();
+        _watcher = null;
+        _watchDebounce?.Stop();
     }
 
     private async void LibraryPage_Loaded(object sender, RoutedEventArgs e)
     {
         try
         {
+            ShowBusy("正在读取实例…");
             _instances.Clear();
-            _instances.AddRange(await LumenRuntime.Instances.ScanAsync());
+            // 扫描在后台线程完成，UI 线程只负责显示，背景动画不会停。
+            _instances.AddRange(await Task.Run(async () => await LumenRuntime.Instances.ScanAsync()));
             InstanceCombo.Items.Clear();
             foreach (var instance in _instances)
             {
@@ -55,6 +78,7 @@ public sealed partial class LibraryPage : Page
             }
             if (_instances.Count == 0)
             {
+                HideBusy();
                 ShowEmpty("还没有可管理的实例");
                 return;
             }
@@ -68,15 +92,34 @@ public sealed partial class LibraryPage : Page
         catch (Exception ex)
         {
             AppLog.Warn("library", "读取库失败：" + ex.Message);
+            HideBusy();
             ShowEmpty("读取库失败：" + ex.Message);
         }
     }
+
+    private void ShowBusy(string message)
+    {
+        _loading?.SetMessage(message);
+        _loading?.Show();
+        EmptyPanel.Visibility = Visibility.Collapsed;
+    }
+
+    private void HideBusy() => _loading?.Hide();
+
+    private string KindLabel => _kind switch
+    {
+        "world" => "世界",
+        "resourcepack" => "资源包",
+        "shader" => "光影",
+        _ => "模组"
+    };
 
     private async Task LoadOverviewAsync()
     {
         try
         {
             var instances = _instances.ToList();
+            OverviewText.Text = "统计中…";
             _overview = await Task.Run(() => LumenRuntime.Library.Overview(instances));
             OverviewText.Text = _overview.Instances + " 个实例 · " + _overview.Mods + " 模组 · " + _overview.Worlds + " 世界 · "
                 + (_overview.ResourcePacks + _overview.ShaderPacks) + " 资源 · 占用 " + FormatSize(_overview.TotalBytes);
@@ -104,8 +147,7 @@ public sealed partial class LibraryPage : Page
         if (sender is not Button { Tag: string kind }) return;
         SelectTab(kind);
         _selected.Clear();
-        Render();
-        await Task.CompletedTask;
+        await RenderAsync(++_renderVersion);
     }
 
     private void SelectTab(string kind)
@@ -114,12 +156,13 @@ public sealed partial class LibraryPage : Page
         foreach (var (button, key) in new[] { (TabMods, "mod"), (TabWorlds, "world"), (TabResources, "resourcepack"), (TabShaders, "shader") })
         {
             var active = key == kind;
-            button.Background = active
-                ? new SolidColorBrush(Color.FromArgb(26, 124, 235, 214))
-                : new SolidColorBrush(Color.FromArgb(0, 0, 0, 0));
-            button.BorderBrush = active
-                ? new SolidColorBrush(Color.FromArgb(70, 124, 235, 214))
-                : (Brush)Application.Current.Resources["BrushStroke"];
+            // 选中态用主题色 + Motion.HoverInMs 过渡：浅色下也能一眼看出当前页签。
+            FadeBrush(button, true, active
+                ? ThemeColor("BrushSelected", Alpha(ThemeManager.Accent, 0x1A))
+                : Color.FromArgb(0, 0, 0, 0), Motion.HoverInMs);
+            FadeBrush(button, false, active
+                ? ThemeColor("BrushNavSelectedBorder", Alpha(ThemeManager.Accent, 0x46))
+                : ThemeColor("BrushStroke", Alpha(ThemeManager.Text, 0x14)), Motion.HoverInMs);
             button.Foreground = active
                 ? (Brush)Application.Current.Resources["BrushMint"]
                 : (Brush)Application.Current.Resources["BrushTextSecondary"];
@@ -138,17 +181,26 @@ public sealed partial class LibraryPage : Page
 
     private async Task ReloadAsync()
     {
-        if (_current is null) return;
+        if (_current is null) { HideBusy(); return; }
         var current = _current;
+        var version = ++_renderVersion;
+        ShowBusy("正在扫描" + KindLabel + "…");
         try
         {
-            _snapshot = await Task.Run(() => LumenRuntime.Library.Scan(current));
-            Render();
+            // 磁盘扫描（读 jar 元数据、算 SHA1）全部放在后台线程。
+            var snapshot = await Task.Run(() => LumenRuntime.Library.Scan(current));
+            if (version != _renderVersion) return;
+            _snapshot = snapshot;
+            await RenderAsync(version);
         }
         catch (Exception ex)
         {
             AppLog.Warn("library", "扫描内容失败：" + ex.Message);
-            ShowEmpty("扫描失败：" + ex.Message);
+            if (version == _renderVersion) ShowEmpty("扫描失败：" + ex.Message);
+        }
+        finally
+        {
+            if (version == _renderVersion) HideBusy();
         }
     }
 
@@ -164,16 +216,23 @@ public sealed partial class LibraryPage : Page
         };
     }
 
-    private void Render()
+    /// <summary>
+    /// 分批把列表画出来：每批之间让出一帧，UI 线程不会被长时间占住，
+    /// 背景的极光/方格动画在处理大列表时也能继续动。
+    /// </summary>
+    private async Task RenderAsync(int version)
     {
         if (_current is null || _snapshot is null) return;
         var items = CurrentItems();
         var folder = NovaLink.Lumen.Services.Minecraft.LibraryService.FolderFor(_current, _kind);
         PathText.Text = folder;
+        WatchFolder(folder);
         CountText.Text = items.Count + " 项";
         ItemList.Children.Clear();
         EmptyPanel.Visibility = items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         ItemList.Visibility = items.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+        // 内容开始上屏就收起加载层：否则会出现「转圈还在 + 列表已经出现」两层叠在一起。
+        HideBusy();
         EmptyText.Text = _kind switch
         {
             "world" => "还没有世界",
@@ -182,17 +241,131 @@ public sealed partial class LibraryPage : Page
             _ => "还没有模组"
         };
         _selected.RemoveWhere(path => items.All(item => !string.Equals(item.Path, path, StringComparison.OrdinalIgnoreCase)));
-        foreach (var item in items)
-            ItemList.Children.Add(BuildRow(item));
+
+        const int batchSize = 8;
+        for (var i = 0; i < items.Count; i += batchSize)
+        {
+            if (version != _renderVersion) return;
+            var end = Math.Min(items.Count, i + batchSize);
+            for (var j = i; j < end; j++)
+            {
+                var row = BuildRow(items[j]);
+                ItemList.Children.Add(row);
+                Motion.RowIn(row, j - i);
+            }
+            if (end < items.Count)
+                await UiYield.NextFrameAsync();
+        }
+
+        if (version != _renderVersion) return;
         UpdateSelection();
     }
 
-    private UIElement BuildRow(LibraryItem item)
+    /// <summary>库目录被外部改动（资源管理器删除/游戏写入）时自动重扫，600ms 防抖。</summary>
+    private void WatchFolder(string folder)
+    {
+        try
+        {
+            if (_watcher is not null && string.Equals(_watcher.Path, folder, StringComparison.OrdinalIgnoreCase))
+                return;
+            _watcher?.Dispose();
+            _watcher = null;
+            if (!Directory.Exists(folder)) return;
+            var watcher = new FileSystemWatcher(folder)
+            {
+                IncludeSubdirectories = true,
+                NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName,
+                InternalBufferSize = 32 * 1024,
+                EnableRaisingEvents = true
+            };
+            watcher.Created += (_, _) => QueueWatchRefresh();
+            watcher.Deleted += (_, _) => QueueWatchRefresh();
+            watcher.Renamed += (_, _) => QueueWatchRefresh();
+            _watcher = watcher;
+        }
+        catch (Exception)
+        {
+            // 目录不可监听（权限/网络盘）时静默放弃，手动刷新仍然可用。
+        }
+    }
+
+    private void QueueWatchRefresh()
+    {
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            if (_watchDebounce is null)
+            {
+                _watchDebounce = DispatcherQueue.CreateTimer();
+                _watchDebounce.IsRepeating = false;
+                _watchDebounce.Interval = TimeSpan.FromMilliseconds(600);
+                _watchDebounce.Tick += (_, _) => _ = ReloadAsync();
+            }
+            // 每次事件都重新计时，避免批量删除时整目录被反复扫描。
+            _watchDebounce.Start();
+        });
+    }
+
+    private static Color ThemeColor(string key, Color fallback) =>
+        Application.Current.Resources.TryGetValue(key, out var value) && value is SolidColorBrush brush
+            ? brush.Color
+            : fallback;
+
+    private static Color Alpha(Color color, byte alpha) => Color.FromArgb(alpha, color.R, color.G, color.B);
+
+    private static Color DangerColor => ThemeColor("BrushDanger", ThemeManager.IsLight
+        ? Color.FromArgb(0xFF, 0xD1, 0x3F, 0x62)
+        : Color.FromArgb(0xFF, 0xFF, 0x6B, 0x8A));
+
+    /// <summary>换色时用 Motion.HoverInMs 过渡，选中/未选中的切换不再硬跳。</summary>
+    private static void FadeBrush(Control target, bool background, Color to, int durationMs)
+    {
+        var previous = (background ? target.Background : target.BorderBrush) as SolidColorBrush;
+        var brush = new SolidColorBrush(to);
+        if (background) target.Background = brush; else target.BorderBrush = brush;
+        AnimateBrush(brush, previous?.Color, to, durationMs);
+    }
+
+    private static void FadeBrush(Border target, bool background, Color to, int durationMs)
+    {
+        var previous = (background ? target.Background : target.BorderBrush) as SolidColorBrush;
+        var brush = new SolidColorBrush(to);
+        if (background) target.Background = brush; else target.BorderBrush = brush;
+        AnimateBrush(brush, previous?.Color, to, durationMs);
+    }
+
+    private static void AnimateBrush(SolidColorBrush brush, Color? from, Color to, int durationMs)
+    {
+        if (from is null || durationMs <= 0 || from.Value == to) return;
+        try
+        {
+            var animation = new ColorAnimation
+            {
+                From = from.Value,
+                To = to,
+                Duration = new Duration(TimeSpan.FromMilliseconds(durationMs)),
+                FillBehavior = FillBehavior.Stop,
+                EnableDependentAnimation = true,
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+            };
+            Storyboard.SetTarget(animation, brush);
+            Storyboard.SetTargetProperty(animation, "Color");
+            var storyboard = new Storyboard();
+            storyboard.Children.Add(animation);
+            storyboard.Begin();
+        }
+        catch (Exception)
+        {
+            // 动画失败时颜色已经落地为目标色，不影响可用性。
+        }
+    }
+
+    private Border BuildRow(LibraryItem item)
     {
         var card = new Border
         {
-            Background = new SolidColorBrush(Color.FromArgb(9, 255, 255, 255)),
-            BorderBrush = new SolidColorBrush(Color.FromArgb(20, 255, 255, 255)),
+            // 玻璃行卡片：填充取玻璃淡层，描边走主题实色，浅色主题下边界才立得住。
+            Background = (Brush)Application.Current.Resources["BrushGlassFaint"],
+            BorderBrush = ThemeManager.BrushCardBorder,
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(14),
             Padding = new Thickness(12, 10, 14, 10)
@@ -208,8 +381,7 @@ public sealed partial class LibraryPage : Page
             Tag = item,
             IsChecked = _selected.Contains(item.Path),
             MinWidth = 0,
-            VerticalAlignment = VerticalAlignment.Center,
-            RequestedTheme = ElementTheme.Dark
+            VerticalAlignment = VerticalAlignment.Center
         };
         check.Checked += (_, _) => SetSelected(item, true);
         check.Unchecked += (_, _) => SetSelected(item, false);
@@ -231,9 +403,9 @@ public sealed partial class LibraryPage : Page
             MaxWidth = 520
         });
         if (!item.Enabled)
-            titleRow.Children.Add(PillTag("已禁用", Color.FromArgb(255, 255, 138, 150)));
+            titleRow.Children.Add(PillTag("已禁用", DangerColor));
         if (!string.IsNullOrWhiteSpace(item.Loader))
-            titleRow.Children.Add(PillTag(item.Loader!, Color.FromArgb(255, 124, 235, 214)));
+            titleRow.Children.Add(PillTag(item.Loader!, ThemeColor("BrushMint", ThemeManager.Accent)));
         text.Children.Add(titleRow);
         text.Children.Add(new TextBlock
         {
@@ -298,8 +470,23 @@ public sealed partial class LibraryPage : Page
         Grid.SetColumn(actions, 3);
         grid.Children.Add(actions);
 
-        card.Child = grid;
+        // 顶边 1.5px 液态高光，和主容器同一配方；不参与命中测试。
+        var shell = new Grid();
+        shell.Children.Add(grid);
+        shell.Children.Add(new Rectangle
+        {
+            Height = 1.5,
+            RadiusX = 13,
+            RadiusY = 13,
+            Margin = new Thickness(1, 0, 1, 0),
+            VerticalAlignment = VerticalAlignment.Top,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Fill = (Brush)Application.Current.Resources["BrushGlassHighlight"],
+            IsHitTestVisible = false
+        });
+        card.Child = shell;
         card.Tag = "no-motion";
+        Motion.Hover(card, 1.003f, 1.0f);
         return card;
     }
 
@@ -310,7 +497,7 @@ public sealed partial class LibraryPage : Page
             Width = 42,
             Height = 42,
             CornerRadius = new CornerRadius(11),
-            Background = new SolidColorBrush(Color.FromArgb(20, 124, 235, 214)),
+            Background = ThemeManager.Brush("BrushAccentSoft", Alpha(ThemeManager.Accent, 0x14)),
             VerticalAlignment = VerticalAlignment.Center
         };
         if (!string.IsNullOrWhiteSpace(item.IconPath) && File.Exists(item.IconPath))
@@ -319,7 +506,12 @@ public sealed partial class LibraryPage : Page
             {
                 host.Background = new ImageBrush
                 {
-                    ImageSource = new BitmapImage(new Uri("file:///" + item.IconPath!.Replace('\\', '/'))),
+                    // 图标只显示 42px，按 2 倍解码就够了：整包图标解码是进库时卡顿的大头。
+                    ImageSource = new BitmapImage(new Uri("file:///" + item.IconPath!.Replace('\\', '/')))
+                    {
+                        DecodePixelWidth = 84,
+                        DecodePixelType = DecodePixelType.Logical
+                    },
                     Stretch = Stretch.UniformToFill
                 };
                 return host;
@@ -374,7 +566,7 @@ public sealed partial class LibraryPage : Page
         BatchDeleteButton.IsEnabled = has;
     }
 
-    private void SelectAll_Changed(object sender, RoutedEventArgs e)
+    private async void SelectAll_Changed(object sender, RoutedEventArgs e)
     {
         if (_bulkGuard) return;
         var check = SelectAllCheck.IsChecked == true;
@@ -382,9 +574,7 @@ public sealed partial class LibraryPage : Page
         if (check)
             foreach (var item in CurrentItems()) _selected.Add(item.Path);
         // Rebuild checkboxes without rescanning disk.
-        ItemList.Children.Clear();
-        foreach (var item in CurrentItems()) ItemList.Children.Add(BuildRow(item));
-        UpdateSelection();
+        await RenderAsync(++_renderVersion);
     }
 
     private List<LibraryItem> SelectedItems() => CurrentItems().Where(item => _selected.Contains(item.Path)).ToList();
@@ -596,7 +786,7 @@ public sealed partial class LibraryPage : Page
         if (_kind != "mod")
         {
             SelectTab("mod");
-            Render();
+            await RenderAsync(++_renderVersion);
         }
         var mods = CurrentItems().ToList();
         if (mods.Count == 0)
@@ -733,12 +923,12 @@ public sealed partial class LibraryPage : Page
             Padding = new Thickness(11, 0, 11, 0),
             FontSize = 11.5,
             CornerRadius = new CornerRadius(8),
-            Background = new SolidColorBrush(Color.FromArgb(10, 255, 255, 255)),
-            BorderBrush = new SolidColorBrush(Color.FromArgb(24, 255, 255, 255)),
+            Background = ThemeManager.Brush("BrushFillSubtle", Alpha(ThemeManager.Text, 0x0A)),
+            BorderBrush = ThemeManager.BrushCardBorder,
             BorderThickness = new Thickness(1)
         };
         if (danger)
-            button.Foreground = new SolidColorBrush(Color.FromArgb(255, 255, 138, 150));
+            button.Foreground = ThemeManager.BrushDanger;
         return button;
     }
 

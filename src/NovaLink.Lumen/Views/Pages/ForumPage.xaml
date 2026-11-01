@@ -7,7 +7,7 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
 
-    <Grid Margin="0,74,0,0">
+    <Grid x:Name="PageRoot" Margin="0,74,0,0">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -35,7 +35,10 @@
             </StackPanel>
         </Grid>
 
-        <ScrollViewer x:Name="ContentScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto">
+        <!-- 滚动容器统一改用 PageScroll：细滚动条会压在右侧卡片的文字上，PageScroll 在右侧留了 14px 内边距，
+             深浅两套主题都靠这段留白把滚动条和内容隔开。
+             原来的 VerticalScrollBarVisibility="Auto" 与样式里的同名 Setter 重复，这里删掉以免两处冲突。 -->
+        <ScrollViewer x:Name="ContentScroll" Grid.Row="1" Style="{StaticResource PageScroll}">
             <StackPanel x:Name="ContentStack" Spacing="16">
 
                 <Border Style="{StaticResource GlassCard}" Padding="26">
@@ -58,7 +61,7 @@
                         </StackPanel>
                         <Border x:Name="MeCard" HorizontalAlignment="Right" VerticalAlignment="Center" Background="{StaticResource BrushFillSoft}" BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1" CornerRadius="18" Padding="14,10" Tapped="MeCard_Tapped">
                             <StackPanel Orientation="Horizontal" Spacing="10">
-                                <Border x:Name="MeAvatarHost" Width="38" Height="38" CornerRadius="12" Background="#267CEBD6" />
+                                <Border x:Name="MeAvatarHost" Width="38" Height="38" CornerRadius="12" Background="{StaticResource BrushSelected}" />
                                 <StackPanel VerticalAlignment="Center" Spacing="2">
                                     <TextBlock x:Name="MeName" Text="未登录" FontSize="13.5" FontWeight="SemiBold" Foreground="{StaticResource BrushText}" />
                                     <TextBlock x:Name="MeKind" Text="离线只读" Style="{StaticResource TextSmall}" />
@@ -66,6 +69,9 @@
                                 </StackPanel>
                             </StackPanel>
                         </Border>
+                        <!-- 液态玻璃：顶部 1px 高光。 -->
+                        <Rectangle Height="1" Margin="1,0,1,0" VerticalAlignment="Top" HorizontalAlignment="Stretch"
+                                   Fill="{StaticResource BrushGlassHighlight}" RadiusX="1" RadiusY="1" IsHitTestVisible="False" />
                     </Grid>
                 </Border>
 
@@ -106,45 +112,71 @@
                                     <TextBlock Text="创建话题" VerticalAlignment="Center" />
                                 </StackPanel>
                             </Button>
+                            <Rectangle Height="1" Margin="1,0,1,0" VerticalAlignment="Top" HorizontalAlignment="Stretch"
+                                       Fill="{StaticResource BrushGlassHighlight}" RadiusX="1" RadiusY="1" IsHitTestVisible="False" />
                         </Grid>
                     </Border>
                     <StackPanel x:Name="TopicList" Spacing="10" />
                 </StackPanel>
 
                 <StackPanel x:Name="TopicDetailPanel" Spacing="12" Visibility="Collapsed">
-                    <Button Style="{StaticResource GhostButton}" HorizontalAlignment="Left" Click="BackToTopics_Click">
+                    <!-- 返回话题：旧版直接套 GhostButton，背景是 BrushFillSubtle（#14FFFFFF 的半透明白）。
+                         浅色主题下这层白几乎和背后的玻璃卡同色，按钮看起来就是一个灰底灰字的灰色占位块。
+                         改成透明底 + 1px BrushBorderSubtle 描边 + BrushText 文字：浅色下靠描边和深色字建立轮廓，
+                         深色下仍是低调的玻璃按钮。hover 交给默认 Button 模板的 PointerOver 状态（主题资源，深浅皆淡）。 -->
+                    <Button x:Name="BackToTopicsButton" AutomationProperties.AutomationId="ForumBackToTopics"
+                            HorizontalAlignment="Left" Click="BackToTopics_Click"
+                            Background="Transparent"
+                            BorderBrush="{StaticResource BrushBorderSubtle}"
+                            BorderThickness="1"
+                            CornerRadius="14"
+                            Height="38"
+                            Padding="14,0"
+                            FontFamily="Segoe UI Variable Display"
+                            FontSize="13"
+                            FontWeight="SemiBold"
+                            Foreground="{StaticResource BrushText}"
+                            HorizontalContentAlignment="Center">
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <FontIcon Glyph="&#xE72B;" FontSize="13" />
-                            <TextBlock Text="返回话题" VerticalAlignment="Center" />
+                            <FontIcon Glyph="&#xE72B;" FontSize="13" Foreground="{StaticResource BrushTextTertiary}" />
+                            <TextBlock Text="返回话题" VerticalAlignment="Center" Foreground="{StaticResource BrushText}" />
                         </StackPanel>
                     </Button>
                     <Border Style="{StaticResource GlassCard}" Padding="24">
-                        <StackPanel Spacing="12">
-                            <Grid>
-                                <StackPanel Spacing="4">
-                                    <TextBlock x:Name="DetailTitle" FontSize="25" FontWeight="SemiBold" Foreground="{StaticResource BrushText}" TextWrapping="Wrap" />
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <TextBlock x:Name="DetailAuthor" Style="{StaticResource TextSmall}" />
-                                        <TextBlock Text="·" Style="{StaticResource TextSmall}" />
-                                        <TextBlock x:Name="DetailTime" Style="{StaticResource TextSmall}" />
+                        <Grid>
+                            <StackPanel Spacing="12">
+                                <Grid>
+                                    <StackPanel Spacing="4">
+                                        <TextBlock x:Name="DetailTitle" FontSize="25" FontWeight="SemiBold" Foreground="{StaticResource BrushText}" TextWrapping="Wrap" />
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <TextBlock x:Name="DetailAuthor" Style="{StaticResource TextSmall}" />
+                                            <TextBlock Text="·" Style="{StaticResource TextSmall}" />
+                                            <TextBlock x:Name="DetailTime" Style="{StaticResource TextSmall}" />
+                                        </StackPanel>
                                     </StackPanel>
-                                </StackPanel>
-                            </Grid>
-                            <TextBlock x:Name="DetailBody" Style="{StaticResource TextBody}" TextWrapping="Wrap" LineHeight="24" />
-                        </StackPanel>
+                                </Grid>
+                                <TextBlock x:Name="DetailBody" Style="{StaticResource TextBody}" TextWrapping="Wrap" LineHeight="24" />
+                            </StackPanel>
+                            <Rectangle Height="1" Margin="1,0,1,0" VerticalAlignment="Top" HorizontalAlignment="Stretch"
+                                       Fill="{StaticResource BrushGlassHighlight}" RadiusX="1" RadiusY="1" IsHitTestVisible="False" />
+                        </Grid>
                     </Border>
                     <StackPanel x:Name="ReplyList" Spacing="8" />
                     <Border Style="{StaticResource GlassCard}" Padding="18">
-                        <StackPanel Spacing="10">
-                            <TextBlock Text="留下你的回复" Style="{StaticResource TextBody}" FontWeight="SemiBold" />
-                            <TextBox x:Name="ReplyBox" AutomationProperties.AutomationId="ForumReplyBox" PlaceholderText="写点什么…（5 秒一次）" AcceptsReturn="True" TextWrapping="Wrap" Height="90" Style="{StaticResource FieldBox}" />
-                            <Grid>
-                                <TextBlock x:Name="ReplyHint" Text="回复会立即显示。" Style="{StaticResource TextSmall}" VerticalAlignment="Center" />
-                                <Button x:Name="ReplyButton" AutomationProperties.AutomationId="ForumReplyButton" Style="{StaticResource AccentButton}" HorizontalAlignment="Right" Click="Reply_Click">
-                                    <TextBlock Text="回复" />
-                                </Button>
-                            </Grid>
-                        </StackPanel>
+                        <Grid>
+                            <StackPanel Spacing="10">
+                                <TextBlock Text="留下你的回复" Style="{StaticResource TextBody}" FontWeight="SemiBold" />
+                                <TextBox x:Name="ReplyBox" AutomationProperties.AutomationId="ForumReplyBox" PlaceholderText="写点什么…（5 秒一次）" AcceptsReturn="True" TextWrapping="Wrap" Height="90" Style="{StaticResource FieldBox}" />
+                                <Grid>
+                                    <TextBlock x:Name="ReplyHint" Text="回复会立即显示。" Style="{StaticResource TextSmall}" VerticalAlignment="Center" />
+                                    <Button x:Name="ReplyButton" AutomationProperties.AutomationId="ForumReplyButton" Style="{StaticResource AccentButton}" HorizontalAlignment="Right" Click="Reply_Click">
+                                        <TextBlock Text="回复" />
+                                    </Button>
+                                </Grid>
+                            </StackPanel>
+                            <Rectangle Height="1" Margin="1,0,1,0" VerticalAlignment="Top" HorizontalAlignment="Stretch"
+                                       Fill="{StaticResource BrushGlassHighlight}" RadiusX="1" RadiusY="1" IsHitTestVisible="False" />
+                        </Grid>
                     </Border>
                 </StackPanel>
 

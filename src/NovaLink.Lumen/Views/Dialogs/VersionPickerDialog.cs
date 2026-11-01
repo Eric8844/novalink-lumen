@@ -17,11 +17,20 @@ namespace NovaLink.Lumen.Views.Dialogs;
 /// <summary>All-version browser grouped by game version and loader.</summary>
 public static class VersionPickerDialog
 {
-    private static readonly Color Text = Color.FromArgb(0xFF, 0xF3, 0xF7, 0xFE);
-    private static readonly Color Muted = Color.FromArgb(0xFF, 0x91, 0xA0, 0xB8);
-    private static readonly Color Faint = Color.FromArgb(0xFF, 0x6E, 0x7E, 0x95);
-    private static readonly Color Mint = Color.FromArgb(0xFF, 0x7C, 0xEB, 0xD6);
-    private static readonly Color Amber = Color.FromArgb(0xFF, 0xF5, 0xC2, 0x6B);
+    // 全部走主题画刷（Theme.xaml 资源），浅色/深色自动跟随；不要再写死深色，否则浅色下正文几乎看不见。
+    private static Brush Text => ThemeManager.BrushText;
+    private static Brush Muted => ThemeManager.BrushTextSecondary;
+    private static Brush Faint => ThemeManager.BrushTextTertiary;
+    private static Brush Mint => ThemeManager.BrushAccent;
+    private static Brush Amber => ThemeManager.Brush("BrushWarn",
+        ThemeManager.IsLight ? Color.FromArgb(0xFF, 0xB2, 0x6A, 0x00) : Color.FromArgb(0xFF, 0xF5, 0xC2, 0x6B));
+    private static Brush Rose => ThemeManager.Brush("BrushDanger",
+        ThemeManager.IsLight ? Color.FromArgb(0xFF, 0xD1, 0x3F, 0x62) : Color.FromArgb(0xFF, 0xFF, 0x6B, 0x8A));
+    private static Brush FillSubtle => ThemeManager.Brush("BrushFillSubtle", ThemeManager.ControlFill);
+    private static Brush FieldEdge => ThemeManager.Brush("BrushFieldBorder", ThemeManager.ControlBorder);
+    private static Brush RowFill => ThemeManager.Brush("BrushGlassFaint", ThemeManager.ControlFill);
+    private static Brush RowEdge => ThemeManager.Brush("BrushBorderSubtle", ThemeManager.ControlBorder);
+    private static Brush RowSelected => ThemeManager.Brush("BrushSelected", ThemeManager.ControlFill);
 
     public static bool IsCompatible(ModrinthVersion version, InstanceSummary? instance, string projectType)
     {
@@ -44,9 +53,12 @@ public static class VersionPickerDialog
         var tcs = new TaskCompletionSource<ModrinthVersion?>(TaskCreationOptions.RunContinuationsAsynchronously);
         var closed = false;
 
+        // 遮罩跟着主题走：浅色下铺浅灰纱，深色下铺暗纱；写死近黑色会让浅色模式整块变黑。
+        var dim = ThemeManager.Dim;
         var overlay = new Grid
         {
-            Background = new SolidColorBrush(Color.FromArgb(0xF2, 0x02, 0x04, 0x08))
+            Background = new SolidColorBrush(Color.FromArgb(
+                ThemeManager.IsLight ? (byte)0xB4 : (byte)0xE6, dim.R, dim.G, dim.B))
         };
 
         var card = new Border
@@ -54,12 +66,13 @@ public static class VersionPickerDialog
             Width = 660,
             MaxHeight = 640,
             Margin = new Thickness(36),
-            Background = new SolidColorBrush(Color.FromArgb(0xFC, 0x08, 0x0E, 0x19)),
-            BorderBrush = new SolidColorBrush(Color.FromArgb(0x30, 0xFF, 0xFF, 0xFF)),
+            Background = GlassModal.GlassLiquidBrush(),
+            BorderBrush = ThemeManager.Brush("BrushGlassRim", ThemeManager.CardBorder),
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(24),
+            CornerRadius = new CornerRadius(22),
             HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center
+            VerticalAlignment = VerticalAlignment.Center,
+            RequestedTheme = ThemeManager.IsLight ? ElementTheme.Light : ElementTheme.Dark
         };
         card.PointerPressed += (_, e) => e.Handled = true;
 
@@ -77,7 +90,7 @@ public static class VersionPickerDialog
             Text = "选择版本",
             FontSize = 21,
             FontWeight = FontWeights.SemiBold,
-            Foreground = new SolidColorBrush(Text)
+            Foreground = Text
         });
         var subtitle = new TextBlock
         {
@@ -85,7 +98,7 @@ public static class VersionPickerDialog
                 ? "正在读取全部版本 · 按游戏版本与加载器折叠分组"
                 : "全部 " + versions.Count + " 个版本 · 按游戏版本与加载器折叠分组",
             FontSize = 11.5,
-            Foreground = new SolidColorBrush(Muted)
+            Foreground = Muted
         };
         heading.Children.Add(subtitle);
         header.Children.Add(heading);
@@ -97,9 +110,9 @@ public static class VersionPickerDialog
             Height = 34,
             Padding = new Thickness(0),
             CornerRadius = new CornerRadius(17),
-            Background = new SolidColorBrush(Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF)),
+            Background = FillSubtle,
             BorderThickness = new Thickness(0),
-            Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0xC7, 0xD3, 0xE6)),
+            Foreground = Muted,
             VerticalAlignment = VerticalAlignment.Top
         };
         Grid.SetColumn(close, 1);
@@ -124,7 +137,7 @@ public static class VersionPickerDialog
         {
             Text = "点击任意版本立即应用，文件列表会在主界面刷新。",
             FontSize = 10.5,
-            Foreground = new SolidColorBrush(Faint),
+            Foreground = Faint,
             VerticalAlignment = VerticalAlignment.Center,
             TextWrapping = TextWrapping.Wrap
         });
@@ -135,17 +148,21 @@ public static class VersionPickerDialog
             MinWidth = 78,
             Padding = new Thickness(18, 0, 18, 0),
             CornerRadius = new CornerRadius(10),
-            Background = new SolidColorBrush(Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF)),
-            BorderBrush = new SolidColorBrush(Color.FromArgb(0x1F, 0xFF, 0xFF, 0xFF)),
+            Background = FillSubtle,
+            BorderBrush = FieldEdge,
             BorderThickness = new Thickness(1),
-            Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0xC7, 0xD3, 0xE6))
+            Foreground = Muted
         };
         Grid.SetColumn(cancel, 1);
         footer.Children.Add(cancel);
         Grid.SetRow(footer, 2);
         layout.Children.Add(footer);
 
-        card.Child = layout;
+        // 与 GlassModal 一致：玻璃底 + 1.5px 顶部高光，圆角 22。
+        var glassRoot = new Grid();
+        glassRoot.Children.Add(layout);
+        glassRoot.Children.Add(GlassModal.TopHighlight(22));
+        card.Child = glassRoot;
         overlay.Children.Add(card);
 
         void Finish(ModrinthVersion? value)
@@ -179,7 +196,7 @@ public static class VersionPickerDialog
             {
                 Text = text,
                 FontSize = 11.5,
-                Foreground = new SolidColorBrush(Muted),
+                Foreground = Muted,
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(2, 12, 2, 12)
             });
@@ -292,8 +309,8 @@ public static class VersionPickerDialog
             HorizontalContentAlignment = HorizontalAlignment.Stretch,
             Padding = new Thickness(11, 8, 11, 8),
             CornerRadius = new CornerRadius(11),
-            Background = new SolidColorBrush(isSelected ? Color.FromArgb(0x22, 0x7C, 0xEB, 0xD6) : Color.FromArgb(0x00, 0, 0, 0)),
-            BorderBrush = new SolidColorBrush(isSelected ? Color.FromArgb(0x66, 0x7C, 0xEB, 0xD6) : Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF)),
+            Background = isSelected ? RowSelected : RowFill,
+            BorderBrush = isSelected ? Mint : RowEdge,
             BorderThickness = new Thickness(1),
             Margin = new Thickness(0, 1, 0, 1)
         };
@@ -309,10 +326,10 @@ public static class VersionPickerDialog
             Text = string.IsNullOrWhiteSpace(version.VersionNumber) ? version.Name : version.VersionNumber,
             FontSize = 13,
             FontWeight = FontWeights.SemiBold,
-            Foreground = new SolidColorBrush(Text),
+            Foreground = Text,
             TextTrimming = TextTrimming.CharacterEllipsis
         });
-        titleLine.Children.Add(Pill(DisplayType(version.VersionType), TypeColor(version.VersionType)));
+        titleLine.Children.Add(Pill(DisplayType(version.VersionType), TypeBrush(version.VersionType)));
         if (!string.IsNullOrWhiteSpace(installedVersion) &&
             string.Equals(installedVersion, version.VersionNumber, StringComparison.OrdinalIgnoreCase))
             titleLine.Children.Add(Pill("已安装", Mint));
@@ -328,7 +345,7 @@ public static class VersionPickerDialog
         {
             Text = string.Join(" · ", details),
             FontSize = 10,
-            Foreground = new SolidColorBrush(Faint),
+            Foreground = Faint,
             TextTrimming = TextTrimming.CharacterEllipsis
         });
         layout.Children.Add(copy);
@@ -337,7 +354,7 @@ public static class VersionPickerDialog
         {
             Glyph = "\uE76C",
             FontSize = 11,
-            Foreground = new SolidColorBrush(isSelected ? Mint : Muted),
+            Foreground = isSelected ? Mint : Muted,
             VerticalAlignment = VerticalAlignment.Center
         };
         Grid.SetColumn(chevron, 1);
@@ -355,21 +372,28 @@ public static class VersionPickerDialog
             Text = title,
             FontSize = 12.5,
             FontWeight = FontWeights.SemiBold,
-            Foreground = new SolidColorBrush(Text)
+            Foreground = Text
         });
         stack.Children.Add(new TextBlock
         {
             Text = subtitle,
             FontSize = 9.5,
-            Foreground = new SolidColorBrush(Faint)
+            Foreground = Faint
+        });
+        stack.Children.Add(new Border
+        {
+            Height = 1,
+            MinWidth = 220,
+            Margin = new Thickness(0, 4, 0, 0),
+            Background = RowEdge
         });
         return stack;
     }
 
-    private static Border Pill(string text, Color color) => new()
+    private static Border Pill(string text, Brush accent) => new()
     {
-        Background = new SolidColorBrush(Color.FromArgb(0x22, color.R, color.G, color.B)),
-        BorderBrush = new SolidColorBrush(Color.FromArgb(0x35, color.R, color.G, color.B)),
+        Background = FillSubtle,
+        BorderBrush = FieldEdge,
         BorderThickness = new Thickness(1),
         CornerRadius = new CornerRadius(6),
         Padding = new Thickness(6, 1, 6, 1),
@@ -378,7 +402,7 @@ public static class VersionPickerDialog
         {
             Text = text,
             FontSize = 8.5,
-            Foreground = new SolidColorBrush(color)
+            Foreground = accent
         }
     };
 
@@ -455,11 +479,11 @@ public static class VersionPickerDialog
         _ => 3
     };
 
-    private static Color TypeColor(string type) => DisplayType(type).ToLowerInvariant() switch
+    private static Brush TypeBrush(string type) => DisplayType(type).ToLowerInvariant() switch
     {
         "release" => Mint,
         "beta" => Amber,
-        "alpha" => Color.FromArgb(0xFF, 0xF0, 0x8A, 0x9A),
+        "alpha" => Rose,
         _ => Muted
     };
 }

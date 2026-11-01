@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -11,6 +12,9 @@ using Microsoft.UI.Xaml.Media.Imaging;
 using NovaLink.Lumen.Core.Models;
 using NovaLink.Lumen.Controls;
 using NovaLink.Lumen.Services;
+using NovaLink.Lumen.Services.Storage;
+using NovaLink.Lumen.Services.Updates;
+using NovaLink.Lumen.Startup;
 using NovaLink.Lumen.Views.Dialogs;
 using Windows.Storage;
 using Windows.Storage.Pickers;
@@ -40,7 +44,8 @@ public sealed partial class SettingsPage : Page
         LumenRuntime.Accounts.AccountsChanged += Accounts_Changed;
         _javaPath = LumenRuntime.Settings.Settings.JavaPath;
         RootText.Text = LumenRuntime.Settings.Settings.GameRoot;
-        VersionText.Text = "NovaLink Lumen 1.4.0";
+        // 版本号跟通道走：正式版 "1.5.0"，测试版 "1.5.0 Preview"。
+        VersionText.Text = "NovaLink Lumen " + LauncherChannelInfo.DisplayVersion;
         DataPathText.Text = LumenRuntime.Paths.Root;
         StorageText.Text = "数据目录\n" + LumenRuntime.Paths.Root;
         MemorySlider.Value = Math.Clamp(LumenRuntime.Settings.Settings.Memory <= 0 ? 4096 : LumenRuntime.Settings.Settings.Memory, 1024, 32768);
@@ -51,11 +56,14 @@ public sealed partial class SettingsPage : Page
         SyncBackgroundMusic();
         SyncDownloadThreads();
         SyncIsolation();
+        // 实验性功能：插件默认关闭，开关初值与「插件」分类的显隐都在这里定一次。
+        SyncExperimental();
         UpdateMemoryLabel();
         ShowPanel("accounts");
         ReloadAccounts();
         await ReloadJavaAsync(false);
         PerfText.Text = "自适应渲染 · 当前窗口 1460 × 920 · 目标 60 FPS";
+        RefreshBackupStatus();
     }
 
     private void SettingsPage_Unloaded(object sender, RoutedEventArgs e)
@@ -514,17 +522,25 @@ public sealed partial class SettingsPage : Page
 
     private void ShowPanel(string tag)
     {
+        // 实验性功能关闭时「插件」页不存在；任何指向它的调用（含重启前残留的偏好）都落到「实验性」页。
+        if (!LumenRuntime.PluginsEnabled && string.Equals(tag, "plugins", StringComparison.Ordinal))
+            tag = "experimental";
+
         SettingsScroll.ChangeView(null, 0, null, true);
         var active = tag switch
         {
             "game" => (FrameworkElement)GamePanel,
+            "plugins" => PluginsPanel,
             "appearance" => AppearancePanel,
+            "experimental" => ExperimentalPanel,
             "about" => AboutPanel,
             _ => AccountsPanel
         };
         AccountsPanel.Visibility = active == AccountsPanel ? Visibility.Visible : Visibility.Collapsed;
         GamePanel.Visibility = active == GamePanel ? Visibility.Visible : Visibility.Collapsed;
+        PluginsPanel.Visibility = active == PluginsPanel ? Visibility.Visible : Visibility.Collapsed;
         AppearancePanel.Visibility = active == AppearancePanel ? Visibility.Visible : Visibility.Collapsed;
+        ExperimentalPanel.Visibility = active == ExperimentalPanel ? Visibility.Visible : Visibility.Collapsed;
         AboutPanel.Visibility = active == AboutPanel ? Visibility.Visible : Visibility.Collapsed;
         // Re-parent only the active panel. Keeping collapsed siblings in the same Grid leaves
         // stale composition tiles behind the glass cards, which reads as a ghost of the old page.
@@ -541,7 +557,9 @@ public sealed partial class SettingsPage : Page
         foreach (var (button, key) in new[]
                  {
                      (CategoryAccounts, "accounts"), (CategoryGame, "game"),
-                     (CategoryAppearance, "appearance"), (CategoryAbout, "about")
+                     (CategoryPlugins, "plugins"),
+                     (CategoryAppearance, "appearance"), (CategoryExperimental, "experimental"),
+                     (CategoryAbout, "about")
                  })
         {
             var on = tag == key;
@@ -550,6 +568,8 @@ public sealed partial class SettingsPage : Page
                 : new SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0));
             button.Foreground = (Brush)Application.Current.Resources[on ? "BrushText" : "BrushTextSecondary"];
         }
+
+        if (tag == "plugins") ReloadPlugins();
     }
 
     private void ReloadAccounts()
@@ -644,9 +664,13 @@ public sealed partial class SettingsPage : Page
     {
         Content = text,
         Style = (Style)Application.Current.Resources["GhostButton"],
-        Height = 30,
-        Padding = new Thickness(10, 0, 10, 0),
-        FontSize = 11.5
+        Height = 32,
+        // 最小宽度 + 左右留 14 + 字号 12.5：这几个按钮原来 46x30、字号 11.5，
+        // 两个汉字只有 23px 宽，浅色下看起来糊成一团。
+        MinWidth = 64,
+        Padding = new Thickness(14, 0, 14, 0),
+        FontSize = 12.5,
+        HorizontalContentAlignment = HorizontalAlignment.Center
     };
 
     private static UIElement Avatar(AccountPublic account)
@@ -929,6 +953,92 @@ public sealed partial class SettingsPage : Page
 
     private async void GitHub_Click(object sender, RoutedEventArgs e)
         => await Windows.System.Launcher.LaunchUriAsync(new Uri("https://github.com/Eric8844/novalink-lumen-releases"));
+
+    /// <summary>刷新「数据备份与恢复」卡片：只显示可用的升级前备份，绝不暴露内部异常文本。</summary>
+    private void RefreshBackupStatus()
+    {
+        try
+        {
+            if (BackupStatusText is null || RestoreBackupButton is null) return;
+
+            var backups = UpgradeGuard.BuildRestorePlan(LumenRuntime.Paths);
+            if (backups.Count == 0)
+            {
+                BackupStatusText.Text = "当前没有可恢复的升级前备份。";
+                RestoreBackupButton.IsEnabled = false;
+                return;
+            }
+
+            var latest = backups[0];
+            var version = ReadBackupSourceVersion(latest);
+            BackupStatusText.Text = version is null
+                ? "可恢复备份 " + backups.Count + " 份 · 最新一份在 " + latest
+                : "可恢复备份 " + backups.Count + " 份 · 最新一份来自 V" + version + "（" + latest + "）";
+            RestoreBackupButton.IsEnabled = true;
+        }
+        catch
+        {
+            if (BackupStatusText is not null) BackupStatusText.Text = "暂时无法读取备份列表。";
+            if (RestoreBackupButton is not null) RestoreBackupButton.IsEnabled = false;
+        }
+    }
+
+    private static string? ReadBackupSourceVersion(string backupRoot)
+    {
+        try
+        {
+            var marker = Path.Combine(backupRoot, UpgradeGuard.BackupInfoFileName);
+            if (!File.Exists(marker)) return null;
+            using var document = JsonDocument.Parse(File.ReadAllText(marker));
+            if (document.RootElement.ValueKind != JsonValueKind.Object) return null;
+            return document.RootElement.TryGetProperty("sourceVersion", out var value)
+                ? value.GetString()
+                : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private async void RestoreBackup_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var backups = UpgradeGuard.BuildRestorePlan(LumenRuntime.Paths);
+            if (backups.Count == 0)
+            {
+                RefreshBackupStatus();
+                await MessageDialog.ShowAsync(XamlRoot, "没有可恢复的备份", "启动器还没有做过升级前备份。升级到新版本时会自动备份。");
+                return;
+            }
+
+            var latest = backups[0];
+            var modal = GlassModal.Show("从备份恢复数据",
+                "会先把现在的数据整体改名保留（不会删除），再把 " + Path.GetFileName(latest) +
+                " 里的数据换回来。启动器随后会重启一次。", 480);
+            var confirmed = false;
+            modal.PrimaryText = "恢复并重启";
+            modal.SecondaryText = "取消";
+            modal.PrimaryInvoked = async () => { confirmed = true; modal.Close(); await Task.CompletedTask; };
+            modal.SecondaryInvoked = async () => { modal.Close(); await Task.CompletedTask; };
+            await modal.WaitAsync();
+            if (!confirmed) return;
+
+            // 恢复必须在服务初始化之前完成，所以只能带着参数重启，不能在本进程里做。
+            var options = StartupOptions.Current;
+            if (!LauncherRestart.Restart(options.BuildArguments(options.SafeMode, restoreDataBackup: true)))
+            {
+                await MessageDialog.ShowAsync(XamlRoot, "无法重启启动器", "请手动关闭后重新打开启动器再试。");
+                return;
+            }
+            Application.Current.Exit();
+        }
+        catch
+        {
+            await MessageDialog.ShowAsync(XamlRoot, "恢复失败", "暂时无法从备份恢复。当前数据没有被删除，可以稍后再试。");
+        }
+    }
 
     private void OpenData_Click(object sender, RoutedEventArgs e)
     {

@@ -9,7 +9,10 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Media.Imaging;
+using Microsoft.UI.Xaml.Shapes;
+using NovaLink.Lumen.Controls;
 using NovaLink.Lumen.Services;
 using NovaLink.Lumen.Services.Forum;
 using NovaLink.Lumen.Services.Http;
@@ -29,13 +32,28 @@ public sealed partial class ForumPage : Page
     private DateTimeOffset _commentCooldownUntil;
     private DateTimeOffset _replyCooldownUntil;
     private DispatcherTimer? _ticker;
+    private LoadingState? _busy;
+    private long _renderToken;
 
     public ForumPage()
     {
         InitializeComponent();
+        _busy = LoadingState.Attach(PageRoot, "正在读取论坛…");
+        _busy.Hide();
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
     }
+
+    /// <summary>显示整页加载层（只做提示，不拦截点击）。</summary>
+    private void ShowBusy(string message)
+    {
+        if (_busy is null) return;
+        _busy.SetMessage(message);
+        _busy.Show();
+    }
+
+    /// <summary>收起整页加载层。</summary>
+    private void HideBusy() => _busy?.Hide();
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
@@ -53,6 +71,10 @@ public sealed partial class ForumPage : Page
         LumenRuntime.Accounts.AccountsChanged -= OnAccountChanged;
         LumenRuntime.Settings.Changed -= OnAccountChanged;
         _ticker?.Stop();
+        // 页面卸载：摘掉加载层，并让正在分批搭建的列表立即作废。
+        _renderToken++;
+        _busy?.Detach();
+        _busy = null;
     }
 
     private void OnAccountChanged(object? sender, EventArgs e) => _ = LoadAsync();
@@ -64,18 +86,20 @@ public sealed partial class ForumPage : Page
         if (_loading) return;
         _loading = true;
         StatusText.Text = "正在读取论坛…";
+        ShowBusy("正在读取论坛…");
         try
         {
+            // 论坛请求与 JSON 解析放到后台线程，UI 线程只负责更新控件。
             var account = LumenRuntime.Accounts.Selected;
-            var session = await LumenRuntime.Forum.SessionAsync(account);
+            var session = await Task.Run(() => LumenRuntime.Forum.SessionAsync(account));
             _me = session.Me;
             UpdateMe(session);
 
-            var topics = await LumenRuntime.Forum.TopicsAsync(account);
-            RenderTopics(topics.Topics);
+            var topics = await Task.Run(() => LumenRuntime.Forum.TopicsAsync(account));
+            await RenderTopicsAsync(topics.Topics);
 
-            var feed = await LumenRuntime.Forum.FeedAsync(account);
-            RenderFeed(feed.Feed);
+            var feed = await Task.Run(() => LumenRuntime.Forum.FeedAsync(account));
+            await RenderFeedAsync(feed.Feed);
 
             if (_topicId is not null && !TopicDetailPanel.Visibility.Equals(Visibility.Collapsed))
                 await ShowTopicAsync(_topicId, false);
@@ -91,6 +115,7 @@ public sealed partial class ForumPage : Page
         {
             _loading = false;
             UpdateCooldowns();
+            HideBusy();
         }
     }
 
@@ -181,6 +206,8 @@ public sealed partial class ForumPage : Page
         if (feed) TopicDetailPanel.Visibility = Visibility.Collapsed;
         TopicsTabLine.Background = feed ? new SolidColorBrush(Colors.Transparent) : Res("BrushMint");
         FeedTabLine.Background = feed ? Res("BrushMint") : new SolidColorBrush(Colors.Transparent);
+        // 标签切换时内容区淡入，避免整块列表硬切。
+        FadeIn(feed ? FeedPanel : TopicsPanel);
         if (feed) _ = LoadFeedAsync();
     }
 
@@ -255,16 +282,21 @@ public sealed partial class ForumPage : Page
         await modal.WaitAsync();
     }
 
-    private void RenderTopics(List<ForumTopicDto> topics)
+    /// <summary>分批搭建话题卡片（每批 6 张让出一帧），过期的一轮在检查点立即退出。</summary>
+    private async Task RenderTopicsAsync(List<ForumTopicDto> topics)
     {
+        var token = ++_renderToken;
         TopicList.Children.Clear();
+        HideBusy();
         if (topics.Count == 0)
         {
             TopicList.Children.Add(EmptyCard("还没有话题", "登录后创建第一个话题，让观点被看见。"));
             return;
         }
+        var built = 0;
         foreach (var topic in topics)
         {
+            if (token != _renderToken) return;
             var card = new Border
             {
                 Style = StyleOf("GlassCard"),
@@ -356,11 +388,12 @@ public sealed partial class ForumPage : Page
             Grid.SetColumn(right, 2);
             grid.Children.Add(right);
 
-            card.Child = grid;
+            card.Child = GlassSurface(grid);
             card.Tapped += async (_, _) => await ShowTopicAsync(topic.Id);
-            card.PointerEntered += (_, _) => card.Background = Res("BrushSurfaceRaised");
-            card.PointerExited += (_, _) => card.Background = Res("BrushGlassCard");
+            Motion.Hover(card, 1.005f, 1.4f);
             TopicList.Children.Add(card);
+            Motion.RowIn(card, built);
+            if (++built % 6 == 0) await UiYield.NextFrameAsync();
         }
     }
 
@@ -414,12 +447,24 @@ public sealed partial class ForumPage : Page
         ReplyList.Children.Clear();
         if (posts.Count == 0)
         {
-            ReplyList.Children.Add(EmptyCard("还没有回复", "成为第一个留下观点的人。"));
+            // 空态也走同一级淡玻璃，否则详情页里会突然冒出一张完整的 GlassCard。
+            ReplyList.Children.Add(EmptyCard("还没有回复", "成为第一个留下观点的人。", faint: true));
             return;
         }
-        foreach (var post in posts)
+        for (var index = 0; index < posts.Count; index++)
         {
-            var card = new Border { Style = StyleOf("GlassCard"), Padding = new Thickness(18, 14, 18, 14) };
+            var post = posts[index];
+            // 回复条目降一级玻璃：原来复用 GlassCard（BrushGlassCard + BrushGlassRim + 24 圆角 + 顶部高光），
+            // 摊在话题主卡下面就是「卡中卡」——浅色下两层半透明白叠出双描边，看起来像套了两个框。
+            // 现在改为 BrushGlassFaint 淡底 + 1px BrushBorderSubtle 细描边 + 16 圆角，只留一层轻量条目感。
+            var card = new Border
+            {
+                Background = Res("BrushGlassFaint"),
+                BorderBrush = Res("BrushBorderSubtle"),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(16),
+                Padding = new Thickness(18, 14, 18, 14)
+            };
             var grid = new Grid { ColumnSpacing = 12 };
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -451,8 +496,10 @@ public sealed partial class ForumPage : Page
             Grid.SetColumn(stack, 1);
             grid.Children.Add(stack);
 
+            // 轻量条目不再包 GlassSurface：顶部高光是给整页主卡用的，每条回复都叠一条亮边又变回"重"卡片。
             card.Child = grid;
             ReplyList.Children.Add(card);
+            Motion.RowIn(card, index);
         }
     }
 
@@ -545,28 +592,38 @@ public sealed partial class ForumPage : Page
 
     private async Task LoadFeedAsync()
     {
+        ShowBusy("正在读取动态…");
         try
         {
-            var feed = await LumenRuntime.Forum.FeedAsync(LumenRuntime.Accounts.Selected);
-            RenderFeed(feed.Feed);
+            var feed = await Task.Run(() => LumenRuntime.Forum.FeedAsync(LumenRuntime.Accounts.Selected));
+            await RenderFeedAsync(feed.Feed);
         }
         catch (Exception ex)
         {
             StatusText.Text = "动态读取失败：" + Human(ex);
             AppLog.Warn("forum", "读取动态失败：" + ex);
         }
+        finally
+        {
+            HideBusy();
+        }
     }
 
-    private void RenderFeed(List<ForumMomentDto> moments)
+    /// <summary>分批搭建动态卡片（每批 6 张让出一帧），避免几十条动态把 UI 线程一次堵死。</summary>
+    private async Task RenderFeedAsync(List<ForumMomentDto> moments)
     {
+        var token = ++_renderToken;
         FeedList.Children.Clear();
+        HideBusy();
         if (moments.Count == 0)
         {
             FeedList.Children.Add(EmptyCard("还没有动态", "分享此刻的想法，让论坛像朋友圈一样流动。"));
             return;
         }
+        var built = 0;
         foreach (var moment in moments)
         {
+            if (token != _renderToken) return;
             var card = new Border { Style = StyleOf("GlassCard"), Padding = new Thickness(20, 16, 20, 16) };
             var stack = new StackPanel { Spacing = 10 };
 
@@ -675,8 +732,10 @@ public sealed partial class ForumPage : Page
             composer.Children.Add(send);
             stack.Children.Add(composer);
 
-            card.Child = stack;
+            card.Child = GlassSurface(stack);
             FeedList.Children.Add(card);
+            Motion.RowIn(card, built);
+            if (++built % 6 == 0) await UiYield.NextFrameAsync();
         }
     }
 
@@ -754,16 +813,19 @@ public sealed partial class ForumPage : Page
     private static FrameworkElement AvatarVisual(string name, string url, double size)
     {
         var root = new Grid { Width = size, Height = size };
+        // 头像占位块：主题 accent 淡底 + 主题描边，浅色下不再是"浅薄荷底 + 近白字"。
         var letter = new Border
         {
             CornerRadius = new CornerRadius(size * 0.3),
-            Background = new SolidColorBrush(Color.FromArgb(0x2E, 0x7C, 0xEB, 0xD6)),
+            Background = Res("BrushSelected"),
+            BorderBrush = Res("BrushBorderSubtle"),
+            BorderThickness = new Thickness(1),
             Child = new TextBlock
             {
                 Text = Initial(name),
                 FontSize = size * 0.42,
                 FontWeight = FontWeights.SemiBold,
-                Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0xD8, 0xFF, 0xF6)),
+                Foreground = Res("BrushMint"),
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
             }
@@ -772,7 +834,13 @@ public sealed partial class ForumPage : Page
         if (!string.IsNullOrWhiteSpace(url))
         {
             var image = new Image { Stretch = Stretch.UniformToFill, Source = new BitmapImage(new Uri(url)) };
-            var clipped = new Border { CornerRadius = new CornerRadius(size * 0.3), Child = image };
+            var clipped = new Border
+            {
+                CornerRadius = new CornerRadius(size * 0.3),
+                BorderBrush = Res("BrushBorderSubtle"),
+                BorderThickness = new Thickness(1),
+                Child = image
+            };
             image.ImageFailed += (_, _) => clipped.Visibility = Visibility.Collapsed;
             root.Children.Add(clipped);
         }
@@ -792,17 +860,72 @@ public sealed partial class ForumPage : Page
         Foreground = Res("BrushTextTertiary")
     };
 
-    private static Border EmptyCard(string title, string text)
+    /// <summary>空态卡片。faint=true 时用回复条目那一级淡玻璃（详情页里避免"卡中卡"）。</summary>
+    private static Border EmptyCard(string title, string text, bool faint = false)
     {
         var stack = new StackPanel { Spacing = 5 };
         stack.Children.Add(new TextBlock { Text = title, FontSize = 14, FontWeight = FontWeights.SemiBold, Foreground = Res("BrushText"), HorizontalAlignment = HorizontalAlignment.Center });
         stack.Children.Add(new TextBlock { Text = text, FontSize = 12, Foreground = Res("BrushTextSecondary"), TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center });
+        if (faint)
+        {
+            // 与回复条目同一配方，保证详情页里所有"条目级"卡片只有一层细描边。
+            return new Border
+            {
+                Background = Res("BrushGlassFaint"),
+                BorderBrush = Res("BrushBorderSubtle"),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(16),
+                Padding = new Thickness(20, 18, 20, 18),
+                Child = stack
+            };
+        }
         return new Border
         {
             Style = StyleOf("GlassCard"),
             Padding = new Thickness(24, 26, 24, 26),
-            Child = stack
+            Child = GlassSurface(stack)
         };
+    }
+
+    /// <summary>液态玻璃卡片的统一外壳：内容 + 顶部 1px 高光（高光 IsHitTestVisible=false，不吃点击）。</summary>
+    private static FrameworkElement GlassSurface(UIElement content)
+    {
+        var grid = new Grid();
+        grid.Children.Add(content);
+        grid.Children.Add(new Rectangle
+        {
+            Height = 1,
+            VerticalAlignment = VerticalAlignment.Top,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Margin = new Thickness(1, 0, 1, 0),
+            RadiusX = 1,
+            RadiusY = 1,
+            Fill = Res("BrushGlassHighlight"),
+            IsHitTestVisible = false
+        });
+        return grid;
+    }
+
+    /// <summary>标签页切换内容区时的统一淡入时长（落在 180–260ms 区间）。</summary>
+    private const int TabFadeMs = 220;
+
+    private static void FadeIn(FrameworkElement element, int durationMs = TabFadeMs)
+    {
+        if (element is null) return;
+        element.Opacity = 0;
+        var story = new Storyboard();
+        var fade = new DoubleAnimation
+        {
+            From = 0,
+            To = 1,
+            Duration = new Duration(TimeSpan.FromMilliseconds(durationMs)),
+            EnableDependentAnimation = true,
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+        };
+        Storyboard.SetTarget(fade, element);
+        Storyboard.SetTargetProperty(fade, "Opacity");
+        story.Children.Add(fade);
+        story.Begin();
     }
 
     private static string KindLabel(string kind) => kind switch

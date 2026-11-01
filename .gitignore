@@ -36,3 +36,12 @@ desktop.ini
 # editor
 .vscode/
 .idea/
+
+# v1.4.1+ 归档目录：安装包/源码快照/全量产物快照不入库，只保留台账。
+# 注意：不能写成 archives/**/* —— 父目录一旦被整体忽略，git 不会再进目录，后面的 ! 例外全部失效。
+archives/*
+!archives/README.md
+!archives/*/
+archives/*/*
+!archives/*/MANIFEST.json
+!archives/*/SHA256SUMS

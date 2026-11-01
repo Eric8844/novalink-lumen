@@ -4,13 +4,17 @@ using System.Text;
 using System.Text.Json;
 using NovaLink.Lumen.Core;
 using NovaLink.Lumen.Core.Models;
+using NovaLink.Lumen.Services.Hooks;
+using NovaLink.Lumen.Services.Updates;
 
 namespace NovaLink.Lumen.Services.Http;
 
 public sealed class HttpService
 {
+    private const string LogArea = "http";
     public HttpClient Client { get; }
-    public const string UserAgent = "NovaLinkLumen/1.4.0 (Windows NT 10.0; Win64; x64)";
+    // 版本号跟通道常量走，避免每次发版漏改（外部服务只用数值版本，不带 Preview 字样）。
+    public const string UserAgent = "NovaLinkLumen/" + LauncherChannelInfo.BaseVersion + " (Windows NT 10.0; Win64; x64)";
 
     public HttpService()
     {
@@ -42,7 +46,8 @@ public sealed class HttpService
 
     public async Task DownloadFileAsync(string url, string destination, IProgress<DownloadProgress>? progress, string stage, CancellationToken ct = default)
     {
-        using var res = await Client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
+        using var request = await CreateGetRequestAsync(url, stage, ct);
+        using var res = await Client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
         if (!res.IsSuccessStatusCode) throw new ApiException((int)res.StatusCode, "HTTP " + (int)res.StatusCode);
         var total = res.Content.Headers.ContentLength ?? 0;
         await using var source = await res.Content.ReadAsStreamAsync(ct);
@@ -70,9 +75,52 @@ public sealed class HttpService
 
     public async Task<byte[]> GetBytesAsync(string url, CancellationToken ct = default)
     {
-        using var res = await Client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
+        using var request = await CreateGetRequestAsync(url, "artifact", ct);
+        using var res = await Client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
         if (!res.IsSuccessStatusCode) throw new ApiException((int)res.StatusCode, "HTTP " + (int)res.StatusCode);
         return await res.Content.ReadAsByteArrayAsync(ct);
+    }
+
+    /// <summary>
+    /// 构建下载用的 GET 请求：先问插件钩子能否把地址换成镜像/加速地址（HookRegistry.DownloadResolve）。
+    /// 没有插件、插件返回 null 或插件抛异常时，一律按官方原地址请求。
+    /// </summary>
+    private static async Task<HttpRequestMessage> CreateGetRequestAsync(string url, string? purpose, CancellationToken ct)
+    {
+        var target = url;
+        IReadOnlyDictionary<string, string>? extraHeaders = null;
+
+        try
+        {
+            var source = await HookRegistry.ResolveDownloadAsync(new DownloadRequest(url, purpose: purpose), ct).ConfigureAwait(false);
+            if (source is not null && Uri.TryCreate(source.Url, UriKind.Absolute, out var uri) &&
+                (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
+            {
+                target = source.Url;
+                extraHeaders = source.Headers;
+                AppLog.Info(LogArea, "插件改写下载地址（" + (purpose ?? "download") + "）：" + source.Url);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn(LogArea, "下载地址钩子失败，已回落到官方地址：" + ex.Message);
+        }
+
+        var request = new HttpRequestMessage(HttpMethod.Get, target);
+        if (extraHeaders is not null)
+        {
+            foreach (var pair in extraHeaders)
+            {
+                try { request.Headers.TryAddWithoutValidation(pair.Key, pair.Value); }
+                catch { }
+            }
+        }
+
+        return request;
     }
 
     public async Task<T?> PostJsonAsync<T>(string url, object body, CancellationToken ct = default)

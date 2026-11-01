@@ -5,9 +5,16 @@
     <Nullable>enable</Nullable>
     <LangVersion>preview</LangVersion>
     <RootNamespace>NovaLink.Lumen.Services</RootNamespace>
+    <!-- 发布通道（编译期写死）：LauncherChannelInfo 在本工程里用 #if NOVALINK_PREVIEW 判断通道，
+         所以这份常量必须和 App 工程保持一致，否则更新器会永远按另一个仓库检查。
+         默认 Stable（正式版）；测试版构建显式传 -p:NovaLinkChannel=Preview。 -->
+    <NovaLinkChannel Condition="'$(NovaLinkChannel)' == ''">Stable</NovaLinkChannel>
+    <DefineConstants Condition="'$(NovaLinkChannel)' == 'Preview'">$(DefineConstants);NOVALINK_PREVIEW</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.0" />
+    <!-- 类型 B（免编译脚本）：纯托管 JS 引擎，无原生依赖（见 docs/PLUGINS.md）。 -->
+    <PackageReference Include="Jint" Version="4.17.0" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\NovaLink.Lumen.Core\NovaLink.Lumen.Core.csproj" />

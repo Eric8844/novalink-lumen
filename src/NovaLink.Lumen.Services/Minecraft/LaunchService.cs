@@ -9,6 +9,7 @@ using NovaLink.Lumen.Services.Accounts;
 using NovaLink.Lumen.Services.Java;
 using NovaLink.Lumen.Services.Microsoft;
 using NovaLink.Lumen.Services.Storage;
+using NovaLink.Lumen.Services.Updates;
 
 namespace NovaLink.Lumen.Services.Minecraft;
 
@@ -35,6 +36,7 @@ public sealed class LaunchService
     private readonly JavaInstallerService? _javaInstaller;
     private Process? _process;
     private DateTimeOffset _startedAt;
+    private string? _playingInstanceId;
 
     public event Action<string>? Output;
     public event Action<int>? Exited;
@@ -152,6 +154,7 @@ public sealed class LaunchService
                 }
                 catch { }
             }
+            RecordPlaytime(instance.Id, startedAt);
             SetState(code == 0 ? GamePhase.Exited : GamePhase.Crashed, instance.Id, instance.Name,
                 State.Pid, _startedAt,
                 code == 0 ? "游戏进程已退出" : "游戏崩溃 · " + (diagnosis?.Title ?? "异常退出"),
@@ -164,11 +167,62 @@ public sealed class LaunchService
         SetState(GamePhase.Starting, instance.Id, instance.Name, 0, startedAt, "正在启动 Java 进程");
         Stage?.Invoke("启动进程", 76, "正在创建 Java 进程");
         if (!process.Start()) throw new InvalidOperationException("无法创建游戏进程");
+        // 进程真的起来了才记录「上次启动」：启动失败（缺 Java、类路径坏）不该算一次游玩。
+        _playingInstanceId = instance.Id;
+        RecordLastPlayed(instance.Id, startedAt);
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
         SetState(GamePhase.Running, instance.Id, instance.Name, process.Id, startedAt, "游戏运行中");
         Stage?.Invoke("运行中", 100, "游戏进程已启动 · PID " + process.Id);
         return process.Id;
+    }
+
+    /// <summary>写入实例的「上次启动」时间。InstanceMeta 是实例页/首页展示的同一个数据源，
+    /// 之前从来没有人写过 LastPlayed，所以两处永远显示"尚未启动"。</summary>
+    private void RecordLastPlayed(string instanceId, DateTimeOffset startedAt)
+    {
+        try
+        {
+            var meta = GetOrCreateMeta(instanceId);
+            meta.LastPlayed = startedAt.ToUnixTimeMilliseconds();
+            _settings.Save();
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("launch", "记录上次启动时间失败：" + ex.Message);
+        }
+    }
+
+    /// <summary>进程退出时累加游玩时长（单次封顶 24 小时，避免休眠或系统时钟跳变把时长算爆）。</summary>
+    private void RecordPlaytime(string instanceId, DateTimeOffset startedAt)
+    {
+        try
+        {
+            var elapsed = (long)(DateTimeOffset.Now - startedAt).TotalMilliseconds;
+            if (elapsed <= 0) return;
+            var meta = GetOrCreateMeta(instanceId);
+            meta.PlaytimeMs += Math.Min(elapsed, 24L * 60 * 60 * 1000);
+            _settings.Save();
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("launch", "记录游玩时长失败：" + ex.Message);
+        }
+        finally
+        {
+            if (string.Equals(_playingInstanceId, instanceId, StringComparison.OrdinalIgnoreCase))
+                _playingInstanceId = null;
+        }
+    }
+
+    private InstanceMeta GetOrCreateMeta(string instanceId)
+    {
+        if (!_settings.Settings.InstanceMeta.TryGetValue(instanceId, out var meta))
+        {
+            meta = new InstanceMeta();
+            _settings.Settings.InstanceMeta[instanceId] = meta;
+        }
+        return meta;
     }
 
     private void SetState(GamePhase phase, string instanceId, string instanceName, int pid,
@@ -607,7 +661,7 @@ public sealed class LaunchService
         {
             ["natives_directory"] = natives,
             ["launcher_name"] = "NovaLinkLumen",
-            ["launcher_version"] = "1.4.0",
+            ["launcher_version"] = LauncherChannelInfo.BaseVersion,
             ["classpath"] = string.Join(';', classpath),
             ["classpath_separator"] = ";",
             ["version_name"] = version.Id,
@@ -652,7 +706,7 @@ public sealed class LaunchService
             ["user_properties"] = "{}",
             ["natives_directory"] = natives,
             ["launcher_name"] = "NovaLinkLumen",
-            ["launcher_version"] = "1.4.0",
+            ["launcher_version"] = LauncherChannelInfo.BaseVersion,
             ["classpath"] = string.Join(';', classpath),
             ["classpath_separator"] = ";",
             ["resolution_width"] = "",

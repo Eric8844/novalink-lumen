@@ -1,0 +1,58 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    插件模板（类型 A：C# + 原生 XAML UI）。
+
+    三个必须遵守的硬约束（踩过坑，别改）：
+    1. 目标框架与宿主完全一致：net10.0-windows10.0.19041.0，win-x64。
+    2. DisableEmbeddedXbf 必须为 false，否则不会产出插件自己的 .pri，
+       运行时会报 XamlParseException（宿主找不到插件的 XAML 资源）。
+    3. WindowsSdkPackageVersion 必须 >= 10.0.26100.86，否则编译期报 CS1705
+       （WinRT 投影版本比 Windows App SDK 引用的旧）。
+
+    发布：build.ps1 会把 bin\Release\net10.0-windows10.0.19041.0\win-x64\ 下的
+    Hello.World.dll / Hello.World.pri / plugin.json 打成一个 hello.world.lumenplugin。
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <UseWinUI>true</UseWinUI>
+    <EnableMsixTooling>false</EnableMsixTooling>
+    <WindowsPackageType>None</WindowsPackageType>
+    <Nullable>enable</Nullable>
+    <LangVersion>preview</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Hello.World</RootNamespace>
+    <AssemblyName>Hello.World</AssemblyName>
+    <WindowsSdkPackageVersion>10.0.26100.86</WindowsSdkPackageVersion>
+    <DisableEmbeddedXbf>false</DisableEmbeddedXbf>
+    <EnableDefaultPriItems>true</EnableDefaultPriItems>
+    <AppendTargetFrameworkToOutputPath>true</AppendTargetFrameworkToOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      宿主提供的程序集由插件加载上下文共享（AssemblyLoadContext 的 default 侧），
+      Private=false 保证不会被复制进插件包，避免和宿主版本打架。
+    -->
+    <ProjectReference Include="..\..\src\NovaLink.Lumen.Core\NovaLink.Lumen.Core.csproj">
+      <Private>false</Private>
+    </ProjectReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.6.4">
+      <Private>false</Private>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.9457" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="plugin.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

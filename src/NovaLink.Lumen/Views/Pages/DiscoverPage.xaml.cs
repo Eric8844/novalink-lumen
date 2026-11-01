@@ -3,7 +3,9 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Media.Imaging;
+using Microsoft.UI.Xaml.Shapes;
 using NovaLink.Lumen.Controls;
 using NovaLink.Lumen.Core.Models;
 using NovaLink.Lumen.Services;
@@ -63,13 +65,39 @@ public sealed partial class DiscoverPage : Page
     private bool _loading;
     private bool _orbsStarted;
     private long _skeletonAt;
+    private LoadingState? _busy;
+    private long _renderToken;
 
     public DiscoverPage()
     {
         InitializeComponent();
+        // 实验性功能「启动器插件」关闭时，插件商店整栏都不出现，页面固定在「内容」。
+        if (!LumenRuntime.PluginsEnabled) SegPlugins.Visibility = Visibility.Collapsed;
+        _busy = LoadingState.Attach(PageRoot, "正在读取内容…");
+        _busy.Hide();
         Loaded += async (_, _) => await InitAsync();
         Loaded += (_, _) => StartAmbient();
+        Unloaded += OnPageUnloaded;
     }
+
+    /// <summary>页面卸载：摘掉加载层并让正在分批搭建的卡片立即作废，避免动画计时器空转。</summary>
+    private void OnPageUnloaded(object sender, RoutedEventArgs e)
+    {
+        _renderToken++;
+        _busy?.Detach();
+        _busy = null;
+    }
+
+    /// <summary>显示整页加载层（只做提示，不拦截点击）。</summary>
+    private void ShowBusy(string message)
+    {
+        if (_busy is null) return;
+        _busy.SetMessage(message);
+        _busy.Show();
+    }
+
+    /// <summary>收起整页加载层。</summary>
+    private void HideBusy() => _busy?.Hide();
 
     private void StartAmbient()
     {
@@ -147,6 +175,7 @@ public sealed partial class DiscoverPage : Page
                 BorderThickness = new Thickness(0)
             };
             button.Click += Category_Click;
+            Motion.Hover(button, 1.012f, 1.2f);
             CategoryRow.Children.Add(button);
         }
         UpdateCategoryButtons();
@@ -158,12 +187,10 @@ public sealed partial class DiscoverPage : Page
         {
             if (child is not Button button) continue;
             var active = string.Equals(button.Tag?.ToString() ?? "", _category, StringComparison.OrdinalIgnoreCase);
-            button.Background = active
-                ? new SolidColorBrush(Color.FromArgb(0x2A, 0x7C, 0xEB, 0xD6))
-                : new SolidColorBrush(Color.FromArgb(0x12, 0xFF, 0xFF, 0xFF));
-            button.Foreground = active
-                ? (Brush)Application.Current.Resources["BrushMint"]
-                : (Brush)Application.Current.Resources["BrushTextSecondary"];
+            // 选中/未选中都用主题 brush：深色下是薄荷色调，浅色下自动变成更深的青绿 + 淡灰底，
+            // 不再用写死的 0x2A7CEBD6 / 0x12FFFFFF（浅色下几乎看不见）。
+            button.Background = active ? Res("BrushSelected") : Res("BrushFillSubtle");
+            button.Foreground = active ? Res("BrushMint") : Res("BrushTextSecondary");
         }
     }
 
@@ -218,12 +245,8 @@ public sealed partial class DiscoverPage : Page
         foreach (var button in new[] { TypeVanilla, TypeMod, TypeResource, TypeShader, TypeModpack })
         {
             var active = string.Equals(button.Tag?.ToString(), _type, StringComparison.OrdinalIgnoreCase);
-            button.Background = active
-                ? new SolidColorBrush(Color.FromArgb(0x2A, 0x7C, 0xEB, 0xD6))
-                : new SolidColorBrush(Color.FromArgb(0x12, 0xFF, 0xFF, 0xFF));
-            button.Foreground = active
-                ? (Brush)Application.Current.Resources["BrushMint"]
-                : (Brush)Application.Current.Resources["BrushTextSecondary"];
+            button.Background = active ? Res("BrushSelected") : Res("BrushFillSubtle");
+            button.Foreground = active ? Res("BrushMint") : Res("BrushTextSecondary");
             button.FontWeight = active ? FontWeights.SemiBold : FontWeights.Normal;
         }
 
@@ -261,6 +284,7 @@ public sealed partial class DiscoverPage : Page
             return;
         }
 
+        ShowBusy(query.Length > 0 ? "正在搜索「" + query + "」…" : "正在读取 Modrinth 资源…");
         ShowSkeleton(query.Length > 0 ? "正在搜索 " + query + " …" : "正在读取内容…");
         EmptyPanel.Visibility = Visibility.Collapsed;
         LoadMoreButton.Visibility = Visibility.Collapsed;
@@ -268,9 +292,10 @@ public sealed partial class DiscoverPage : Page
 
         try
         {
-            var result = await LumenRuntime.Modrinth.SearchAsync(
+            // 网络请求与 JSON 解析都放在后台线程，UI 线程只负责把结果变成卡片。
+            var result = await Task.Run(() => LumenRuntime.Modrinth.SearchAsync(
                 query, _type, _gameVersion, _loader, 0, PageSize,
-                query.Length == 0 ? "downloads" : "relevance", _category, cts.Token);
+                query.Length == 0 ? "downloads" : "relevance", _category, cts.Token), cts.Token);
             if (cts.IsCancellationRequested) return;
             _total = result.TotalHits;
             _items.AddRange(result.Hits);
@@ -278,7 +303,8 @@ public sealed partial class DiscoverPage : Page
             StatusText.Text = "";
             await HoldSkeletonAsync();
             if (cts.IsCancellationRequested) return;
-            RenderItems(_items);
+            HideBusy();
+            await RenderItemsAsync(_items, cts.Token);
             UpdateFooter();
         }
         catch (OperationCanceledException) { }
@@ -297,6 +323,7 @@ public sealed partial class DiscoverPage : Page
             {
                 _loading = false;
                 _searchCts = null;
+                HideBusy();
             }
         }
     }
@@ -306,11 +333,13 @@ public sealed partial class DiscoverPage : Page
         if (_loading) return;
         _loading = true;
         LoadMoreButton.IsEnabled = false;
+        ShowBusy("正在加载更多内容…");
         try
         {
-            var result = await LumenRuntime.Modrinth.SearchAsync(
-                _query, _type, _gameVersion, _loader, _items.Count, PageSize,
-                _query.Length == 0 ? "downloads" : "relevance", _category);
+            var skip = _items.Count;
+            var result = await Task.Run(() => LumenRuntime.Modrinth.SearchAsync(
+                _query, _type, _gameVersion, _loader, skip, PageSize,
+                _query.Length == 0 ? "downloads" : "relevance", _category));
             _total = result.TotalHits;
             foreach (var item in result.Hits)
             {
@@ -318,7 +347,8 @@ public sealed partial class DiscoverPage : Page
                 if (_items.Any(x => string.Equals(string.IsNullOrWhiteSpace(x.ProjectId) ? x.Slug : x.ProjectId, key, StringComparison.OrdinalIgnoreCase))) continue;
                 _items.Add(item);
             }
-            RenderItems(_items);
+            HideBusy();
+            await RenderItemsAsync(_items, CancellationToken.None);
             UpdateFooter();
         }
         catch (Exception ex)
@@ -329,6 +359,7 @@ public sealed partial class DiscoverPage : Page
         {
             _loading = false;
             LoadMoreButton.IsEnabled = true;
+            HideBusy();
         }
     }
 
@@ -380,11 +411,18 @@ public sealed partial class DiscoverPage : Page
         if (remain > TimeSpan.Zero) await Task.Delay(remain);
     }
 
-    private void RenderItems(IReadOnlyList<ModrinthProject> items)
+    /// <summary>
+    /// 分批搭建卡片：每批 3 行（9 张）后让出一帧，避免一次性建上百张卡片把 UI 线程堵死。
+    /// 每次渲染自增 <see cref="_renderToken"/>，过期的一轮会在下一个检查点直接退出。
+    /// </summary>
+    private async Task RenderItemsAsync(IReadOnlyList<ModrinthProject> items, CancellationToken ct)
     {
+        var token = ++_renderToken;
         ResultsPanel.Children.Clear();
+        HideBusy();
         for (var i = 0; i < items.Count; i += 3)
         {
+            if (token != _renderToken || ct.IsCancellationRequested) return;
             var row = new Grid { ColumnSpacing = 14, Height = 228 };
             for (var c = 0; c < 3; c++)
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -395,16 +433,21 @@ public sealed partial class DiscoverPage : Page
                 row.Children.Add(card);
             }
             ResultsPanel.Children.Add(row);
+            // 先上屏再入场：行只有在挂进视觉树后动画才会真正跑。
+            for (var c = 0; c < row.Children.Count; c++)
+                if (row.Children[c] is FrameworkElement cardElement) Motion.RowIn(cardElement, i + c);
+            await UiYield.NextFrameAsync();
         }
     }
 
     private Border BuildCard(ModrinthProject project)
     {
+        // 玻璃配方：GlassCard 样式给 BrushGlassCard 底 + BrushGlassRim 描边，
+        // 不再覆盖成 BrushCardTint（浅色下那块 #F4FFFFFF 看起来就是一张白纸）。
         var card = new Border
         {
             Style = (Style)Application.Current.Resources["GlassCard"],
             Padding = new Thickness(18, 16, 18, 14),
-            Background = (Brush)Application.Current.Resources["BrushCardTint"],
             Tag = project
         };
         card.Tapped += async (_, e) => { e.Handled = true; await ShowDetailAsync(project); };
@@ -506,10 +549,12 @@ public sealed partial class DiscoverPage : Page
         {
             Content = "安装", Height = 30, Padding = new Thickness(15, 0, 15, 0),
             CornerRadius = new CornerRadius(9), FontSize = 11.5,
-            Background = new SolidColorBrush(Color.FromArgb(0x26, 0x7C, 0xEB, 0xD6)),
-            Foreground = (Brush)Application.Current.Resources["BrushMint"],
+            // 主按钮观感：accent 渐变底 + BrushOnAccent 深色字，浅色模式下同样可读。
+            Background = Res("BrushAccent"),
+            Foreground = Res("BrushOnAccent"),
             BorderThickness = new Thickness(0)
         };
+        Motion.Hover(install, 1.03f, 1.2f);
         install.Click += async (_, _) => await ShowDetailAsync(project, true);
         actions.Children.Add(install);
         Grid.SetColumn(actions, 1);
@@ -517,8 +562,27 @@ public sealed partial class DiscoverPage : Page
         Grid.SetRow(foot, 2);
         root.Children.Add(foot);
 
-        card.Child = root;
+        card.Child = GlassSurface(root);
         return card;
+    }
+
+    /// <summary>液态玻璃卡片的统一外壳：内容 + 顶部 1px 高光（高光 IsHitTestVisible=false，不吃点击）。</summary>
+    private static FrameworkElement GlassSurface(UIElement content)
+    {
+        var grid = new Grid();
+        grid.Children.Add(content);
+        grid.Children.Add(new Rectangle
+        {
+            Height = 1,
+            VerticalAlignment = VerticalAlignment.Top,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Margin = new Thickness(1, 0, 1, 0),
+            RadiusX = 1,
+            RadiusY = 1,
+            Fill = Res("BrushGlassHighlight"),
+            IsHitTestVisible = false
+        });
+        return grid;
     }
 
     private static async Task LocalizeAsync(ModrinthProject project, TextBlock badge, TextBlock description)
@@ -630,4 +694,30 @@ public sealed partial class DiscoverPage : Page
     }
 
     private void OpenLibrary_Click(object sender, RoutedEventArgs e) => ShellPage.Current?.Navigate("library");
+
+    /// <summary>按主题 key 取实时画刷（浅色/深色切换后自动跟随，绝不缓存冻结颜色）。</summary>
+    private static Brush Res(string key) => ThemeManager.Brush(key, ThemeManager.Text);
+
+    /// <summary>分段控件切换内容区时的淡入时长：统一落在 180–260ms 区间。</summary>
+    private const int SegmentFadeMs = 220;
+
+    /// <summary>淡入一个刚显示出来的内容区，避免分段切换时硬闪。</summary>
+    private static void FadeIn(FrameworkElement element, int durationMs = SegmentFadeMs)
+    {
+        if (element is null) return;
+        element.Opacity = 0;
+        var story = new Storyboard();
+        var fade = new DoubleAnimation
+        {
+            From = 0,
+            To = 1,
+            Duration = new Duration(TimeSpan.FromMilliseconds(durationMs)),
+            EnableDependentAnimation = true,
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+        };
+        Storyboard.SetTarget(fade, element);
+        Storyboard.SetTargetProperty(fade, "Opacity");
+        story.Children.Add(fade);
+        story.Begin();
+    }
 }

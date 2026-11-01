@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using NovaLink.Lumen.Core.Plugins;
 
 namespace NovaLink.Lumen.Services.Storage;
 
@@ -27,6 +28,10 @@ public sealed class SecretProtector
 
     public string Unprotect(string? value)
     {
+        // 插件信任边界：插件直接调用解密会在这里被拒，拿不到明文令牌。
+        // 宿主自己的调用（登录、启动游戏、刷新令牌）不受影响。
+        PluginTrustBoundary.EnsureTrustedCaller(typeof(SecretProtector).Assembly, "读取启动器保存的账户凭据");
+
         if (string.IsNullOrWhiteSpace(value)) return "";
         try
         {

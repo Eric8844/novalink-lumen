@@ -50,6 +50,9 @@ public sealed class AppSettings
     public List<string> RecentProjects { get; set; } = [];
     public string LastSeenVersion { get; set; } = "";
 
+    /// <summary>实验性功能：启动器插件（默认关闭）。开启后才会加载插件、显示插件商店与插件设置页。</summary>
+    public bool ExperimentalPlugins { get; set; }
+
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? Extra { get; set; }
 }

@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
 using NovaLink.Lumen.Controls;
 using NovaLink.Lumen.Services;
+using NovaLink.Lumen.Services.Hooks;
 using NovaLink.Lumen.Views;
 using System;
 using System.Threading.Tasks;
@@ -192,19 +193,24 @@ public sealed class GlassModal
         Grid.SetRow(buttons, 2);
         cardGrid.Children.Add(buttons);
 
+        // 液态玻璃壳：Acrylic 磨砂底 + 玻璃描边 + 顶部 1.5px 高光，全部取主题画刷，深浅色自动跟随。
+        var glassRoot = new Grid();
+        glassRoot.Children.Add(cardGrid);
+        glassRoot.Children.Add(TopHighlight(22));
+
         _card = new Border
         {
             Width = width,
             MaxHeight = 720,
-            Background = GlassCardBrush(),
-            BorderBrush = new SolidColorBrush(ThemeManager.CardBorder),
+            Background = GlassLiquidBrush(),
+            BorderBrush = ThemeManager.Brush("BrushGlassRim", ThemeManager.CardBorder),
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(24),
+            CornerRadius = new CornerRadius(22),
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
             RenderTransformOrigin = new Point(0.5, 0.5),
             RenderTransform = new TransformGroup { Children = { _cardScale, _cardShift } },
-            Child = cardGrid,
+            Child = glassRoot,
             RequestedTheme = ThemeManager.IsLight ? ElementTheme.Light : ElementTheme.Dark
         };
 
@@ -225,7 +231,12 @@ public sealed class GlassModal
             ?? throw new InvalidOperationException("主窗口尚未准备好。");
         if (Current is { IsClosed: false })
             throw new InvalidOperationException("已有弹窗正在显示。");
-        var modal = new GlassModal(host, title, subtitle, width);
+        // 文本替换钩子：插件可改写所有弹窗的标题/副标题（本地化、术语替换等）。
+        var modal = new GlassModal(
+            host,
+            HookRegistry.ApplyTextReplace(title),
+            subtitle is null ? null : HookRegistry.ApplyTextReplace(subtitle),
+            width);
         Current = modal;
         return modal;
     }
@@ -245,16 +256,20 @@ public sealed class GlassModal
         _close.Visibility = Visibility.Collapsed;
     }
 
-    private static Brush GlassCardBrush()
+    /// <summary>液态玻璃底：优先用主题里的 Acrylic 画刷（BrushGlassLiquid），取不到时退回卡片底色。</summary>
+    public static Brush GlassLiquidBrush() => ThemeManager.Brush("BrushGlassLiquid", ThemeManager.CardSurface);
+
+    /// <summary>玻璃顶部一道 1~1.5px 的高光，跟容器同圆角、不参与命中测试；浮层/卡片都可复用。</summary>
+    public static Border TopHighlight(double cornerRadius, double thickness = 1.5) => new()
     {
-        var tint = ThemeManager.CardSurface;
-        return new AcrylicBrush
-        {
-            TintColor = tint,
-            TintOpacity = ThemeManager.IsLight ? 0.62 : 0.48,
-            FallbackColor = Color.FromArgb(0xE8, tint.R, tint.G, tint.B)
-        };
-    }
+        Height = thickness,
+        Margin = new Thickness(1, 0, 1, 0),
+        HorizontalAlignment = HorizontalAlignment.Stretch,
+        VerticalAlignment = VerticalAlignment.Top,
+        CornerRadius = new CornerRadius(cornerRadius),
+        Background = ThemeManager.Brush("BrushGlassHighlight", ThemeManager.CardBorder),
+        IsHitTestVisible = false
+    };
 
     public void HideSecondary() => _secondary.Visibility = Visibility.Collapsed;
     public void HidePrimary() => _primary.Visibility = Visibility.Collapsed;
@@ -301,29 +316,30 @@ public sealed class GlassModal
         _cardScale.ScaleY = 0.965;
         _cardShift.Y = 18;
         var story = new Storyboard();
-        AddFade(_dim, 0, 1, 260, 0);
-        AddFade(_card, 0, 1, 220, 20);
-        AddScale(_cardScale, 0.965, 1, 440, 20, new BackEase { Amplitude = 0.18, EasingMode = EasingMode.EaseOut });
-        AddY(_cardShift, 18, 0, 440, 20);
+        // 时长统一走 Motion 常量，别再写裸数字：遮罩 340ms，卡片 230ms 淡入 + 460ms 上浮。
+        AddFade(_dim, 0, 1, Motion.RevealMs, 0);
+        AddFade(_card, 0, 1, Motion.HoverOutMs, Motion.StaggerMs / 2);
+        AddScale(_cardScale, 0.965, 1, Motion.RiseMs, Motion.StaggerMs, new BackEase { Amplitude = 0.18, EasingMode = EasingMode.EaseOut });
+        AddY(_cardShift, 18, 0, Motion.RiseMs, Motion.StaggerMs);
         story.Begin();
         _ = FocusAsync();
     }
 
     private async Task FocusAsync()
     {
-        await Task.Delay(140);
+        await Task.Delay(Motion.HoverInMs);
         if (!IsClosed) _primary.Focus(FocusState.Programmatic);
     }
 
     private async Task AnimateOutAsync()
     {
         var story = new Storyboard();
-        AddFade(_dim, _dim.Opacity, 0, 180, 0);
-        AddFade(_card, _card.Opacity, 0, 150, 0);
-        AddScale(_cardScale, 1, 0.975, 180, 0, new CubicEase { EasingMode = EasingMode.EaseIn });
-        AddY(_cardShift, _cardShift.Y, 8, 180, 0);
+        AddFade(_dim, _dim.Opacity, 0, Motion.HoverInMs, 0);
+        AddFade(_card, _card.Opacity, 0, Motion.HoverInMs, 0);
+        AddScale(_cardScale, 1, 0.975, Motion.HoverInMs, 0, new CubicEase { EasingMode = EasingMode.EaseIn });
+        AddY(_cardShift, _cardShift.Y, 8, Motion.HoverInMs, 0);
         story.Begin();
-        await Task.Delay(200);
+        await Task.Delay(Motion.HoverOutMs);
         _host.Children.Remove(_dim);
         _host.Children.Remove(_card);
         if (_host.Children.Count == 0)

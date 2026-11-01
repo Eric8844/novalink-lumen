@@ -12,7 +12,6 @@ using NovaLink.Lumen.Views;
 using NovaLink.Lumen.Views.Dialogs;
 using System;
 using System.Collections.Generic;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -27,10 +26,14 @@ namespace NovaLink.Lumen.Views.Pages;
 
 public sealed partial class HomePage : Page
 {
+    private const int RenderBatchSize = 6;
+
     private IReadOnlyList<InstanceSummary> _instances = Array.Empty<InstanceSummary>();
     private bool _hooked;
     private bool _loading;
     private bool _launching;
+    private LoadingState? _busy;
+    private int _renderToken;
     private CancellationTokenSource? _greetingCts;
     private CancellationTokenSource? _taglineCts;
     private CancellationTokenSource? _heroArtCts;
@@ -42,10 +45,27 @@ public sealed partial class HomePage : Page
     public HomePage()
     {
         InitializeComponent();
+        EnsureBusy().Hide();
         Loaded += OnLoaded;
         GlassPanes.Track(this);
         Unloaded += OnUnloaded;
     }
+
+    private LoadingState EnsureBusy()
+    {
+        if (_busy is null || _busy.Parent is null)
+            _busy = LoadingState.Attach(PageRoot, "正在加载首页…");
+        return _busy;
+    }
+
+    private void ShowBusy(string message)
+    {
+        var busy = EnsureBusy();
+        busy.SetMessage(message);
+        busy.Show();
+    }
+
+    private void HideBusy() => _busy?.Hide();
 
     private void HomePage_SizeChanged(object sender, SizeChangedEventArgs e)
     {
@@ -67,6 +87,11 @@ public sealed partial class HomePage : Page
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
+        // 页面离开：作废进行中的渲染，摘掉加载层，避免动画在后台继续跑。
+        _renderToken++;
+        _loading = false;
+        _busy?.Detach();
+        _busy = null;
         if (!_hooked) return;
         _hooked = false;
         LumenRuntime.Accounts.AccountsChanged -= OnDataChanged;
@@ -79,6 +104,9 @@ public sealed partial class HomePage : Page
 
     private void OnDataChanged(object? sender, EventArgs e)
         => DispatcherQueue.TryEnqueue(() => _ = ReloadAsync());
+
+    /// <summary>外壳在游戏退出后调用，让「上次游玩」和数据统计立即反映这一局。</summary>
+    public void Reload() => _ = ReloadAsync();
 
     private void RenderGreeting(bool force = false)
     {
@@ -114,16 +142,27 @@ public sealed partial class HomePage : Page
     {
         if (_loading) return;
         _loading = true;
+        var token = ++_renderToken;
+        ShowBusy("正在加载首页…");
         try
         {
+            // 先把加载动画画上一帧，再去后台扫盘。
+            await UiYield.NextFrameAsync();
+            // 内容一端出现就收起加载层，避免转圈与已渲染内容叠在一起。
+            HideBusy();
             RenderGreeting(false);
-            _instances = await LumenRuntime.Instances.ScanAsync();
+            var scanned = await Task.Run(async () => await LumenRuntime.Instances.ScanAsync());
+            if (token != _renderToken) return;
+            _instances = scanned;
             var current = ActiveInstance;
             RenderHero(current);
             RenderAccount();
-            RenderVersions();
+            await UiYield.NextFrameAsync();
+            if (token != _renderToken) return;
+            await RenderVersionsAsync(token);
             UpdatePlayState(LumenRuntime.Launch.State);
-            await RenderNewsAsync(false);
+            await RenderNewsAsync(false, token);
+            if (token != _renderToken) return;
             UpdateJavaChip();
             DispatcherQueue.TryEnqueue(() => GlassPanes.Track(this));
         }
@@ -131,7 +170,14 @@ public sealed partial class HomePage : Page
         {
             AppLog.Error("home", "加载首页失败", ex);
         }
-        finally { _loading = false; }
+        finally
+        {
+            if (token == _renderToken)
+            {
+                _loading = false;
+                HideBusy();
+            }
+        }
     }
 
     private InstanceSummary? ActiveInstance
@@ -208,8 +254,8 @@ public sealed partial class HomePage : Page
         _heroArtCts = cts;
         try
         {
-            var source = await LumenRuntime.HeroArt.GetAsync(
-                current.Kernel, current.Id, current.Loader ?? "Vanilla", cts.Token);
+            var source = await Task.Run(async () => await LumenRuntime.HeroArt.GetAsync(
+                current.Kernel, current.Id, current.Loader ?? "Vanilla", cts.Token));
             if (cts.IsCancellationRequested) return;
             DispatcherQueue.TryEnqueue(() =>
             {
@@ -241,7 +287,7 @@ public sealed partial class HomePage : Page
             {
                 From = 0,
                 To = 1,
-                Duration = new Duration(TimeSpan.FromMilliseconds(420)),
+                Duration = new Duration(TimeSpan.FromMilliseconds(Motion.RevealMs)),
                 EnableDependentAnimation = true
             };
             Storyboard.SetTarget(fade, HeroArt);
@@ -260,7 +306,7 @@ public sealed partial class HomePage : Page
     {
         try
         {
-            var lines = await LumenRuntime.HeroTaglines.GetAsync(version);
+            var lines = await Task.Run(async () => await LumenRuntime.HeroTaglines.GetAsync(version));
             if (lines.Count == 0) return;
             DispatcherQueue.TryEnqueue(() => SetTagline(PickTagline(lines), false));
         }
@@ -349,16 +395,25 @@ public sealed partial class HomePage : Page
         catch { HomeAvatar.Source = null; }
     }
 
-    private void RenderVersions()
+    private async Task RenderVersionsAsync(int token)
     {
         VersionCountText.Text = _instances.Count + " 个已安装";
         VersionList.Children.Clear();
         var active = ActiveInstance;
-        var visible = active is null
+        var visible = (active is null
             ? _instances.Take(3)
-            : _instances.OrderByDescending(x => string.Equals(x.Id, active.Id, StringComparison.OrdinalIgnoreCase)).Take(3);
+            : _instances.OrderByDescending(x => string.Equals(x.Id, active.Id, StringComparison.OrdinalIgnoreCase)).Take(3))
+            .ToList();
+        var built = 0;
         foreach (var instance in visible)
-            VersionList.Children.Add(BuildVersionCard(instance));
+        {
+            // 分批上屏并让出帧，避免一次建太多视觉树把 UI 线程占满。
+            if (token != _renderToken) return;
+            var card = BuildVersionCard(instance);
+            VersionList.Children.Add(card);
+            Motion.RowIn(card, built % RenderBatchSize);
+            if (++built % RenderBatchSize == 0) await UiYield.NextFrameAsync();
+        }
         if (_instances.Count == 0)
         {
             var empty = new Border
@@ -401,12 +456,19 @@ public sealed partial class HomePage : Page
         Motion.Hover(card, 1.012f, 3f);
 
         var grid = new Grid();
+        // 水印用加载器首字母（F/V/M），不要用名字首字母：版本名多以数字开头（26.2-…），
+        // 会变成一个大号「2」，看起来像排版事故。
+        var loader = instance.Loader;
+        var watermarkText = string.IsNullOrWhiteSpace(loader)
+            ? "V"
+            : char.ToUpperInvariant(loader![0]).ToString();
         var watermark = new TextBlock
         {
-            Text = string.IsNullOrWhiteSpace(instance.Name) ? "?" : instance.Name[..1].ToUpperInvariant(),
+            Text = watermarkText,
             FontSize = 62,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(16, 255, 255, 255)),
+            Foreground = ThemeManager.BrushText,
+            Opacity = 0.055,
             HorizontalAlignment = HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Bottom,
             Margin = new Thickness(0, 0, 2, -10)
@@ -419,8 +481,8 @@ public sealed partial class HomePage : Page
             HorizontalAlignment = HorizontalAlignment.Left,
             CornerRadius = new CornerRadius(6),
             Padding = new Thickness(8, 3, 8, 3),
-            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(28, 124, 235, 214)),
-            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(50, 124, 235, 214)),
+            Background = ThemeManager.Brush("BrushAccentSoft", ThemeManager.Accent),
+            BorderBrush = ThemeManager.Brush("BrushNavSelectedBorder", ThemeManager.Accent),
             BorderThickness = new Thickness(1),
             Child = new TextBlock
             {
@@ -452,12 +514,15 @@ public sealed partial class HomePage : Page
         return card;
     }
 
-    private async Task RenderNewsAsync(bool force)
+    private async Task RenderNewsAsync(bool force, int token)
     {
-        var items = await LumenRuntime.News.GetAsync(force);
+        var items = await Task.Run(async () => await LumenRuntime.News.GetAsync(force));
+        if (token != _renderToken) return;
         NewsList.Children.Clear();
+        var built = 0;
         foreach (var item in items.Take(4))
         {
+            if (token != _renderToken) return;
             var content = new Grid();
             content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(54) });
             content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -517,6 +582,9 @@ public sealed partial class HomePage : Page
             };
             row.Click += NewsRow_Click;
             NewsList.Children.Add(row);
+            Motion.RowIn(row, built % RenderBatchSize);
+            Motion.Hover(row, 1.006f, 1.4f);
+            if (++built % RenderBatchSize == 0) await UiYield.NextFrameAsync();
         }
     }
 
@@ -746,7 +814,7 @@ public sealed partial class HomePage : Page
 
     private async void RefreshNews_Click(object sender, RoutedEventArgs e)
     {
-        try { await RenderNewsAsync(true); }
+        try { await RenderNewsAsync(true, _renderToken); }
         catch (Exception ex) { await ShowAsync("刷新失败", ex.Message); }
     }
 

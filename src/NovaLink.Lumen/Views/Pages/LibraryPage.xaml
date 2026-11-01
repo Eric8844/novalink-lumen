@@ -5,7 +5,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Background="Transparent">
 
-    <Grid Margin="4,78,4,14">
+    <Grid x:Name="LibraryRoot" Margin="4,78,4,14">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -48,7 +48,7 @@
 
         <Grid Grid.Row="1" Margin="0,0,0,12">
             <StackPanel Orientation="Horizontal" Spacing="10">
-                <Border Background="{StaticResource BrushGlassFaint}" BorderBrush="{StaticResource BrushStroke}" BorderThickness="1" Padding="14,8,14,8" CornerRadius="14">
+                <Border Background="{StaticResource BrushGlassFaint}" BorderBrush="{StaticResource BrushGlassRim}" BorderThickness="1" Padding="14,8,14,8" CornerRadius="14">
                     <StackPanel Orientation="Horizontal" Spacing="9">
                         <FontIcon Glyph="&#xE7C3;" FontSize="13" Foreground="{StaticResource BrushTextTertiary}" />
                         <TextBlock Text="当前实例" Style="{StaticResource TextSmall}" VerticalAlignment="Center" />
@@ -85,7 +85,7 @@
 
                 <Grid Grid.Row="1" Margin="8,0,8,10" x:Name="BulkBar">
                     <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                        <CheckBox x:Name="SelectAllCheck" AutomationProperties.AutomationId="LibrarySelectAll" Checked="SelectAll_Changed" Unchecked="SelectAll_Changed" RequestedTheme="Dark" MinWidth="0" />
+                        <CheckBox x:Name="SelectAllCheck" AutomationProperties.AutomationId="LibrarySelectAll" Checked="SelectAll_Changed" Unchecked="SelectAll_Changed" MinWidth="0" />
                         <TextBlock x:Name="SelectionText" Text="全选" Style="{StaticResource TextSmall}" VerticalAlignment="Center" MinWidth="88" />
                         <Button x:Name="BatchEnableButton" Style="{StaticResource GhostButton}" Height="32" Padding="12,0" Content="批量启用" Click="BatchEnable_Click" />
                         <Button x:Name="BatchDisableButton" Style="{StaticResource GhostButton}" Height="32" Padding="12,0" Content="批量禁用" Click="BatchDisable_Click" />
@@ -94,9 +94,12 @@
                     </StackPanel>
                 </Grid>
 
-                <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <ScrollViewer Grid.Row="2" Style="{StaticResource PageScroll}">
                     <StackPanel x:Name="ItemList" Spacing="8" />
                 </ScrollViewer>
+                <Rectangle Grid.RowSpan="3" Height="1.5" RadiusX="23" RadiusY="23" Margin="1,0,1,0"
+                           VerticalAlignment="Top" HorizontalAlignment="Stretch"
+                           Fill="{StaticResource BrushGlassHighlight}" IsHitTestVisible="False" />
                 <StackPanel x:Name="EmptyPanel" Grid.Row="2" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10" Visibility="Collapsed">
                     <FontIcon Glyph="&#xE7B8;" FontSize="28" Foreground="{StaticResource BrushTextTertiary}" />
                     <TextBlock x:Name="EmptyText" Text="这里还是空的" FontSize="15" Foreground="{StaticResource BrushTextSecondary}" />
@@ -104,5 +107,8 @@
                 </StackPanel>
             </Grid>
         </Border>
+
+        <!-- 加载动画层：盖在内容区上，数据准备好后隐藏 -->
+        <Grid x:Name="LoadingHost" Grid.Row="2" />
     </Grid>
 </Page>
