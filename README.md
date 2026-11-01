@@ -107,8 +107,6 @@ dotnet publish src/NovaLink.Lumen/NovaLink.Lumen.csproj -c Release -r win-x64 --
 makensis installer/installer.nsi
 ```
 
-产物：`dist/NovaLinkLumen-WinUI-Setup-<版本>.exe`。v1.5.0 起产物文件名带版本号，发布通道由 `-p:NovaLinkChannel=Stable|Preview` 决定（**默认 Preview**，正式发版务必显式传 `Stable`），测试版流程见 [docs/PUBLISHING.md](docs/PUBLISHING.md) 第 6.1 节。`dist/` 被 `.gitignore` 忽略，下一次 publish 会原地覆盖它 —— 发版前先按 [docs/PUBLISHING.md](docs/PUBLISHING.md) 把上一版本归档进 `archives/`。
-
 > 发布目录需要同时包含 `NovaLink.Lumen.pri` 与 `Assets` 资源；项目已通过 `CopyPriToPublish` 和 Content 规则自动补齐。
 
 ## 目录
