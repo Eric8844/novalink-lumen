@@ -150,23 +150,26 @@ Error - aborting creation process
 用一个 1 MB 的最小脚本复现，报的是 `Can't open output file`；同目录用 PowerShell / .NET 写文件完全正常，
 换成 NSIS 3.13 或 **3.10** 立刻成功 —— 属于这个 2019 年的 32 位旧版在新系统上的环境问题，不是脚本问题。
 
-> 2026-11-07 复核：NSIS 3.10（官方 `nsis-3.10.zip` 便携版，解压后 `D:\AI service\desktop\.cache\nsis\nsis-3.10\makensis.exe`）
-> 已能完整构建 1.5.1 安装包（253 MB 安装数据、LZMA），耗时约 1 分钟。同批排查确认与火绒 HIPS（`D:\Huorong\Sysdiag\bin\HipsDaemon.exe`）、
-> 磁盘/内存、TEMP 路径、压缩算法都无关：3.04 连空 Section 的脚本都写不出输出文件。
-> 本机已把用户环境变量 `NOVALINK_NSIS` 指向 3.10，`build.ps1` 不传 `-NsisPath` 也能用。
+> **2026-11-07 发布 v1.5.1 时的最终结论（推翻上文「与 HIPS 无关」的判断）**：把官方 `nsis-3.10.zip` 便携版解压到
+> `D:\AI service\desktop\.cache\nsis\nsis-3.10\` 之后，**在这个目录里运行 makensis 仍然失败**（3.04 与 3.10 都报
+> `Internal compiler error #12345: error creating mmap the size of 40378846` / `Can't open output file`，最小空脚本、
+> 换 TEMP / dist / 用户目录输出全部复现）；但 PowerShell 自己往该目录写文件、`tar`、复制 exe 都正常。
+> 把整份 NSIS 3.10 复制到用户目录后**立刻成功**（253 MB 安装数据、LZMA，约 1 分钟），因此判定为火绒 HIPS
+> （`D:\Huorong\Sysdiag\bin\HipsTray.exe` / `wsctrlsvc`）拦截 `desktop\.cache\nsis\` 路径下 makensis 的 mmap 写盘。
+> 本机可用的路径是 `%LOCALAPPDATA%\NovaLinkBuild\nsis-3.10\makensis.exe`；`NOVALINK_NSIS` 也应指向这份副本。
 
 绕过办法（本机发版用这条）：
 
 ```powershell
-# 1) 取 NSIS 3.13：chocolatey 的 nsis.portable 包里就是官方 zip
-Invoke-WebRequest 'https://community.chocolatey.org/api/v2/package/nsis.portable' -OutFile nsis.nupkg -UseBasicParsing
-Expand-Archive nsis.nupkg -DestinationPath nsis-pkg -Force
-Expand-Archive nsis-pkg\tools\nsis-3.13.zip -DestinationPath nsis313 -Force
+# 1) 取 NSIS：chocolatey 的 nsis.portable 包里就是官方 zip（本机已解压过 3.10）
+$dst = Join-Path $env:LOCALAPPDATA 'NovaLinkBuild\nsis-3.10'
+New-Item -ItemType Directory -Force -Path (Split-Path $dst) | Out-Null
+Copy-Item 'D:\AI service\desktop\.cache\nsis\nsis-3.10' $dst -Recurse -Force
 
 # 2) 指给 build.ps1（脚本里已有 NOVALINK_NSIS 候选，无需改代码）
-$env:NOVALINK_NSIS = '<解压目录>\nsis-3.13\makensis.exe'
-powershell -ExecutionPolicy Bypass -File scripts\build.ps1
+powershell -ExecutionPolicy Bypass -File scripts\build.ps1 -NsisPath (Join-Path $dst 'makensis.exe')
 ```
+> 关键：**不要把 makensis 留在 `desktop\.cache` 里跑**，那份会被 HIPS 拦住 mmap；先复制到用户目录再跑。
 
 `installer/installer.nsi` 的 `StrFunc.nsh` 用法已兼容两版（新版 `${Using:StrFunc} StrStr`，旧版 `!insertmacro FUNCTION_STRING_StrStr`）。
 另外：**改 `installer.nsi` 之后必须确认它仍是 UTF-8 带 BOM**（`Unicode true` + 中文注释需要 BOM），
