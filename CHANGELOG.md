@@ -1,8 +1,10 @@
 # Changelog
 
-## v1.5.1（2026-11-07）
+## v1.5.1（2026-11-07，已发布）
 
 > v1.5.0 发布之后进入源码仓的改动，统一归入 1.5.1。
+>
+> 安装包 `NovaLinkLumen-WinUI-Setup-1.5.1.exe`（69,398,948 字节，sha256 `F909B785741483C44AE61B4BF035B94BE061498477B833CCD74ECE07484F6F2A`）；Release：[正式版仓](https://github.com/Eric8844/novalink-lumen-releases/releases/tag/v1.5.1) · [源码仓](https://github.com/Eric8844/novalink-lumen/releases/tag/v1.5.1)。
 
 ### 新增
 

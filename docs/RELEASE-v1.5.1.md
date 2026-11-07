@@ -1,6 +1,6 @@
 # v1.5.1 发版清单
 
-> **本文档是清单，不代表已经发布。** 里面的勾选框只有真正执行过才能打勾；发布动作（打 tag、上传 GitHub Release、开放源码仓）本轮**不执行**，等确认后再按 [PUBLISHING.md](PUBLISHING.md) 走。
+> **本清单已于 2026-11-07 执行发布**：源码仓 tag `v1.5.1`（提交 `4beca1f`）、正式版仓 Release [v1.5.1](https://github.com/Eric8844/novalink-lumen-releases/releases/tag/v1.5.1)、源码仓镜像 Release [v1.5.1](https://github.com/Eric8844/novalink-lumen/releases/tag/v1.5.1)。勾选框只代表真正执行过的步骤；未执行的回归项保持未勾选。
 
 版本：**1.5.1**（应用内显示 `1.5.1`，程序集 `1.5.1.0`）
 
@@ -54,8 +54,8 @@ powershell -ExecutionPolicy Bypass -File scripts\build.ps1 -NsisPath "D:\AI serv
 
 - [x] 三工程 0 警告 0 错误
 - [x] `dist/release/NovaLink.Lumen.exe` 的 `ProductVersion = 1.5.1`（含 `+b3dd3f5…` 源码版本后缀）、`FileVersion = 1.5.1.0`
-- [x] `dist/NovaLinkLumen-WinUI-Setup-1.5.1.exe` 生成：69,379,917 B
-  - sha256 `9C6CA59AA92D89599D17F79C1A74E612D034FDC728C070A83EE8278312C24B5B`
+- [x] `dist/NovaLinkLumen-WinUI-Setup-1.5.1.exe` 生成：69,398,948 B（修完 `ShellPage.xaml:113` 版本 ToolTip 后重打包的最终产物）
+  - sha256 `F909B785741483C44AE61B4BF035B94BE061498477B833CCD74ECE07484F6F2A`（GitHub 上传后返回的 digest 与之一致）
   - 安装包版本资源 `ProductVersion = 1.5.1`、`FileVersion = 1.5.1`
 
 ---
@@ -89,18 +89,21 @@ powershell -ExecutionPolicy Bypass -File scripts\build.ps1 -NsisPath "D:\AI serv
 - [x] `archives/1.5.0/` 已完成（`MANIFEST.json` + `SHA256SUMS` 进 git，安装包/release 快照/源码 tar 不进 git）
   - exe `NovaLinkLumen-WinUI-Setup-1.5.0.exe` 69,297,059 B
   - sha256 `3818225BD4E17076AB9A0014DBF78E0B4025C42712DEB03346BB2CA8ACFB02E5`
-- [ ] 发版后按同样流程归档 1.5.1：`scripts/archive-release.ps1 -Version 1.5.1`
+- [x] 发版后已归档 1.5.1：`scripts/archive-release.ps1 -Version 1.5.1`
+  - exe `NovaLinkLumen-WinUI-Setup-1.5.1.exe` 69,398,948 B，sha256 `F909B785741483C44AE61B4BF035B94BE061498477B833CCD74ECE07484F6F2A`
+  - `archives/1.5.1/`：SHA256SUMS 549 行、release 快照 547 文件、源码 tar.gz；MANIFEST.json 与 SHA256SUMS 进 git，其余被 `.gitignore:45` 挡住
 - 安装器的 `Data_Backup_v1.5.0` 目录由升级守卫创建，卸载程序不会删除
 
 ---
 
-## 5. 发布步骤（本轮不执行）
+## 5. 发布步骤（2026-11-07 已执行）
 
-1. `git tag -a v1.5.1`（源码仓 Eric8844/novalink-lumen）
-2. `scripts/build.ps1` 产出安装包
-3. 上传 `Eric8844/novalink-lumen-releases`：`NovaLinkLumen-WinUI-Setup-1.5.1.exe` + 本文件第 6 节更新说明
-4. 源码仓推送 + 镜像 Release
-5. 归档 1.5.1
+1. [x] `git tag -a v1.5.1` → 提交 `4beca1f`（源码仓 Eric8844/novalink-lumen）
+2. [x] `scripts/build.ps1 -NsisPath "%LOCALAPPDATA%\NovaLinkBuild\nsis-3.10\makensis.exe"` 产出安装包（本机 `desktop\.cache\nsis` 路径会被火绒 HIPS 拦住 mmap，必须把 NSIS 复制到用户目录再跑）
+3. [x] Release `Eric8844/novalink-lumen-releases`：[v1.5.1](https://github.com/Eric8844/novalink-lumen-releases/releases/tag/v1.5.1)（release id 437465141），资产 `NovaLinkLumen-WinUI-Setup-1.5.1.exe` 69,398,948 B
+4. [x] 源码仓推送（`5e6ae5e..b30f6a3` main + tag v1.5.1）+ 镜像 Release：[v1.5.1](https://github.com/Eric8844/novalink-lumen/releases/tag/v1.5.1)
+5. [x] 归档 1.5.1（`archives/1.5.1`，提交 `b30f6a3`）
+6. [x] 更新器自检：`releases/latest` 返回 v1.5.1、资产名匹配 `-Setup-\d+\.\d+\.\d+`、HEAD 下载 200 且 Content-Length 一致
 
 ---
 

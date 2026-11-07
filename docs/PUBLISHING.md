@@ -370,6 +370,15 @@ Get-FileHash dist/NovaLinkLumen-WinUI-Setup-<版本>.exe -Algorithm SHA256
 
 **注意**：产物的 SHA256 会写进 Release 说明，重建一次安装包就要同步改一次；`releases/latest/download/<资产名>` 是客户端更新器的唯一下载入口，重传资产后要 HEAD 一次确认字节数一致。
 
+### 6.2 发版记录（Release 台账）
+
+每发一版把这一行补上；sha256 与字节数必须与上传到 GitHub 的资产一致，客户端更新器只认 `releases/latest` 与资产名里的 `-Setup-x.y.z`。
+
+| 版本 | 发布日 | tag / 提交 | Release | 资产 | 字节 | SHA256 |
+|---|---|---|---|---|---|---|
+| 1.5.1 | 2026-11-07 | `v1.5.1` / `4beca1f` | [releases 仓 437465141](https://github.com/Eric8844/novalink-lumen-releases/releases/tag/v1.5.1) · [源码仓](https://github.com/Eric8844/novalink-lumen/releases/tag/v1.5.1) | `NovaLinkLumen-WinUI-Setup-1.5.1.exe` | 69,398,948 | `F909B785741483C44AE61B4BF035B94BE061498477B833CCD74ECE07484F6F2A` |
+| 1.5.0 | 2026-11-01 | `v1.5.0` / `b3dd3f5` | [releases 仓 430474319](https://github.com/Eric8844/novalink-lumen-releases/releases/tag/v1.5.0) · [源码仓](https://github.com/Eric8844/novalink-lumen/releases/tag/v1.5.0) | `NovaLinkLumen-WinUI-Setup-1.5.0.exe` | 69,297,059 | `3818225BD4E17076AB9A0014DBF78E0B4025C42712DEB03346BB2CA8ACFB02E5` |
+
 ## 7. 官网与更新接口
 
 如果使用独立更新接口，返回：
