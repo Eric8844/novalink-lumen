@@ -38,7 +38,7 @@
             </Grid.ColumnDefinitions>
 
             <Border x:Name="NavRail" Grid.Column="0" Background="#38060B13" BorderBrush="#12FFFFFF" BorderThickness="0,0,1,0">
-                <Grid Padding="0,18,0,16">
+                <Grid x:Name="NavRailGrid" Padding="0,18,0,16">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
@@ -109,8 +109,8 @@
                                         <Ellipse Width="4" Height="4" Fill="{StaticResource BrushMint}"
                                                  HorizontalAlignment="Center" VerticalAlignment="Center" />
                                     </Grid>
-                                    <TextBlock x:Name="VersionChipText" Text="1.5.0" FontSize="9.5"
-                                               ToolTipService.ToolTip="正式版 1.5.0"
+                                    <TextBlock x:Name="VersionChipText" Text="1.5.1" FontSize="9.5"
+                                               ToolTipService.ToolTip="正式版 1.5.1"
                                                Foreground="{StaticResource BrushTextTertiary}" />
                                 </StackPanel>
                             </Border>
@@ -179,14 +179,6 @@
                                 <TextBlock Text="关闭游戏" FontSize="11.5" FontWeight="SemiBold" />
                             </StackPanel>
                         </Button>
-                        <Border x:Name="JavaChip" Style="{StaticResource Pill}" Height="40" Padding="13,0"
-                                Background="{StaticResource BrushSearchGlass}" BorderBrush="{StaticResource BrushGlassRim}">
-                            <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
-                                <FontIcon Glyph="&#xE943;" FontSize="13" Foreground="{StaticResource BrushMint}" />
-                                <TextBlock x:Name="JavaChipText" Text="Java" FontSize="11.5"
-                                           Foreground="{StaticResource BrushTextSecondary}" />
-                            </StackPanel>
-                        </Border>
                         <Button Style="{StaticResource IconButton}" Click="Activity_Click">
                             <FontIcon Glyph="&#xE9D9;" FontSize="15" />
                         </Button>
@@ -299,14 +291,17 @@
                         <FontIcon x:Name="MusicModeIcon" Glyph="&#xE8EE;" FontSize="12" />
                     </Button>
                     <Button Grid.Column="3" Width="28" Height="28" Padding="0" CornerRadius="8"
+                            AutomationProperties.AutomationId="MusicPrevButton"
                             Style="{StaticResource GhostButton}" Click="MusicPrevious_Click" ToolTipService.ToolTip="上一首">
                         <FontIcon Glyph="&#xE892;" FontSize="12" />
                     </Button>
                     <Button Grid.Column="4" Width="30" Height="30" Padding="0" CornerRadius="9"
+                            AutomationProperties.AutomationId="MusicPlayButton"
                             Style="{StaticResource AccentButton}" Click="MusicToggle_Click" ToolTipService.ToolTip="播放 / 暂停">
                         <FontIcon x:Name="MusicPlayIcon" Glyph="&#xE768;" FontSize="12" />
                     </Button>
                     <Button Grid.Column="5" Width="28" Height="28" Padding="0" CornerRadius="8"
+                            AutomationProperties.AutomationId="MusicNextButton"
                             Style="{StaticResource GhostButton}" Click="MusicNext_Click" ToolTipService.ToolTip="下一首">
                         <FontIcon Glyph="&#xE893;" FontSize="12" />
                     </Button>

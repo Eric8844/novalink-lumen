@@ -49,7 +49,11 @@ public sealed class SettingsService
         }
     }
 
-    public void Save()
+    /// <summary>
+    /// 写盘并广播 Changed。音乐播放位置/音量这类「只有外壳自己在乎」的字段用 notify:false 保存，
+    /// 否则每次点播放按钮都会把首页、论坛页整体重载一遍。
+    /// </summary>
+    public void Save(bool notify = true)
     {
         lock (_gate)
         {
@@ -65,7 +69,7 @@ public sealed class SettingsService
                 AppLog.Error("settings", "保存配置失败", ex);
             }
         }
-        Changed?.Invoke(this, EventArgs.Empty);
+        if (notify) Changed?.Invoke(this, EventArgs.Empty);
     }
 
     public void SaveSoon()

@@ -57,12 +57,14 @@ public sealed class LoadingState : UserControl
             });
         }
 
+        // 居中而不是贴在页面顶部：贴顶会压住页面标题（发现页反馈"加载动画跑到上方"）。
         var stack = new StackPanel
         {
             Spacing = 0,
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            VerticalAlignment = VerticalAlignment.Top,
-            Padding = new Thickness(8, 24, 8, 8)
+            Width = 380,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            Padding = new Thickness(8, 8, 8, 8)
         };
         stack.Children.Add(_ring);
         stack.Children.Add(_message);

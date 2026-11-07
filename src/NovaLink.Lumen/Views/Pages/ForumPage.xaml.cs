@@ -11,7 +11,6 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Media.Imaging;
-using Microsoft.UI.Xaml.Shapes;
 using NovaLink.Lumen.Controls;
 using NovaLink.Lumen.Services;
 using NovaLink.Lumen.Services.Forum;
@@ -38,6 +37,9 @@ public sealed partial class ForumPage : Page
     public ForumPage()
     {
         InitializeComponent();
+        // 话题/动态分段栏：装好药丸指示器，初始停在「话题」，之后切换只让药丸滑过去。
+        SegmentedSwitch.Enable(ForumTabBar);
+        SegmentedSwitch.Select(ForumTabBar, 0, animate: false);
         _busy = LoadingState.Attach(PageRoot, "正在读取论坛…");
         _busy.Hide();
         Loaded += OnLoaded;
@@ -204,8 +206,8 @@ public sealed partial class ForumPage : Page
         TopicsPanel.Visibility = feed ? Visibility.Collapsed : Visibility.Visible;
         FeedPanel.Visibility = feed ? Visibility.Visible : Visibility.Collapsed;
         if (feed) TopicDetailPanel.Visibility = Visibility.Collapsed;
-        TopicsTabLine.Background = feed ? new SolidColorBrush(Colors.Transparent) : Res("BrushMint");
-        FeedTabLine.Background = feed ? Res("BrushMint") : new SolidColorBrush(Colors.Transparent);
+        // 药丸滑到「话题」或「动态」（选中态文字颜色/不透明度由 SegmentedSwitch 统一处理）。
+        SegmentedSwitch.Select(ForumTabBar, feed ? 1 : 0);
         // 标签切换时内容区淡入，避免整块列表硬切。
         FadeIn(feed ? FeedPanel : TopicsPanel);
         if (feed) _ = LoadFeedAsync();
@@ -496,7 +498,7 @@ public sealed partial class ForumPage : Page
             Grid.SetColumn(stack, 1);
             grid.Children.Add(stack);
 
-            // 轻量条目不再包 GlassSurface：顶部高光是给整页主卡用的，每条回复都叠一条亮边又变回"重"卡片。
+            // 轻量条目不再包 GlassSurface：每条回复都套一层外壳会变回"重"卡片。
             card.Child = grid;
             ReplyList.Children.Add(card);
             Motion.RowIn(card, index);
@@ -887,24 +889,8 @@ public sealed partial class ForumPage : Page
         };
     }
 
-    /// <summary>液态玻璃卡片的统一外壳：内容 + 顶部 1px 高光（高光 IsHitTestVisible=false，不吃点击）。</summary>
-    private static FrameworkElement GlassSurface(UIElement content)
-    {
-        var grid = new Grid();
-        grid.Children.Add(content);
-        grid.Children.Add(new Rectangle
-        {
-            Height = 1,
-            VerticalAlignment = VerticalAlignment.Top,
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            Margin = new Thickness(1, 0, 1, 0),
-            RadiusX = 1,
-            RadiusY = 1,
-            Fill = Res("BrushGlassHighlight"),
-            IsHitTestVisible = false
-        });
-        return grid;
-    }
+    /// <summary>卡片统一外壳：直接返回内容容器（用户要求去掉顶部高光横线）。</summary>
+    private static FrameworkElement GlassSurface(FrameworkElement content) => content;
 
     /// <summary>标签页切换内容区时的统一淡入时长（落在 180–260ms 区间）。</summary>
     private const int TabFadeMs = 220;

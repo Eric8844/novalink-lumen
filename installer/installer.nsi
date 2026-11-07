@@ -7,7 +7,7 @@
 ;
 ; 版本号由 scripts/bump-version.ps1 逐条改写，本文件有四处：APP_VERSION、APP_VERSION_DISPLAY、
 ; VIProductVersion、以及 OUT 默认文件名里的版本号。别漏。
-; 允许命令行覆盖：makensis /DAPP_VERSION=1.5.0 /DOUT=C:\tmp\test.exe installer\installer.nsi（/DOUT 仅用于自检）。
+; 允许命令行覆盖：makensis /DAPP_VERSION=1.5.1 /DOUT=C:\tmp\test.exe installer\installer.nsi（/DOUT 仅用于自检）。
 
 Unicode true
 !include "MUI2.nsh"
@@ -24,12 +24,12 @@ Unicode true
 !define APP_NAME "NovaLink Lumen"
 !define APP_EXE "NovaLink.Lumen.exe"
 !ifndef APP_VERSION
-  !define APP_VERSION "1.5.0"
+  !define APP_VERSION "1.5.1"
 !endif
 ; 显示用版本号：正式版与 APP_VERSION 相同，测试版是 "1.5.0 Preview"（由 build.ps1 传 -D 覆盖）。
 ; 只影响卸载项 DisplayVersion 与 BrandingText，不影响文件版本（文件版本必须纯数字）。
 !ifndef APP_VERSION_DISPLAY
-  !define APP_VERSION_DISPLAY "1.5.0"
+  !define APP_VERSION_DISPLAY "1.5.1"
 !endif
 !define APP_PUBLISHER "NovaLink"
 !define APP_ID "NovaLink.Lumen"
@@ -38,7 +38,7 @@ Unicode true
 ; 用户数据根与升级前备份目录（备份与 LauncherData 同级，卸载“删数据”不会连带删备份）。
 !define DATA_ROOT "$LOCALAPPDATA\NovaLink Lumen"
 !define LAUNCHER_DATA "${DATA_ROOT}\LauncherData"
-!define BACKUP_DIR "${DATA_ROOT}\Data_Backup_v1.4.0"
+!define BACKUP_DIR "${DATA_ROOT}\Data_Backup_v1.5.0"
 ; 安装/卸载日志：只追加到 %TEMP%，写失败不影响安装。
 !define INSTALL_LOG "$TEMP\NovaLinkLumen-install.log"
 ; 程序文件来源目录：默认 dist/release，可用 /DSOURCE=... 指向别处（仅自检用）。
@@ -46,7 +46,7 @@ Unicode true
   !define SOURCE "..\dist\release"
 !endif
 !ifndef OUT
-  !define OUT "..\dist\NovaLinkLumen-WinUI-Setup-1.5.0.exe"
+  !define OUT "..\dist\NovaLinkLumen-WinUI-Setup-1.5.1.exe"
 !endif
 
 Name "${APP_NAME}"
@@ -57,7 +57,7 @@ InstallDirRegKey HKCU "Software\${APP_ID}" "InstallDir"
 SetCompressor /SOLID lzma
 BrandingText "${APP_NAME} ${APP_VERSION_DISPLAY}"
 
-VIProductVersion "1.5.0.0"
+VIProductVersion "1.5.1.0"
 VIAddVersionKey "ProductName" "${APP_NAME}"
 VIAddVersionKey "CompanyName" "${APP_PUBLISHER}"
 VIAddVersionKey "FileDescription" "NovaLink Lumen 安装程序"

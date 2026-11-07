@@ -27,6 +27,11 @@ public sealed class PluginRuntimeOptions
     public IPluginUi? Ui { get; init; }
 
     /// <summary>
+    /// 主题令牌实现；未注入时插件拿到 NullPluginTheme（固定深色，Changed 永不触发）。
+    /// </summary>
+    public IPluginTheme? Theme { get; init; }
+
+    /// <summary>
     /// 查询某个插件是否被用户启用（读 lumen.json 的 plugins.&lt;id&gt;.enabled）。
     /// 返回 null 表示未配置 —— 缺省启用。未注入时所有插件都按启用处理。
     /// </summary>

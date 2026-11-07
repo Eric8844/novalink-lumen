@@ -39,14 +39,18 @@
                     </StackPanel>
                 </Grid>
 
-                <!-- 发现页分栏：内容（Modrinth）与启动器插件（GitHub 商店）。 -->
-                <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,2,0,0">
-                    <Button x:Name="SegContent" Content="内容" Style="{StaticResource GhostButton}" Height="38" Padding="16,0"
-                            Background="{StaticResource BrushNavSelected}" Foreground="{StaticResource BrushMint}"
-                            Click="SegContent_Click" AutomationProperties.AutomationId="DiscoverSegContent" />
-                    <Button x:Name="SegPlugins" Content="启动器插件" Style="{StaticResource GhostButton}" Height="38" Padding="16,0"
-                            Click="SegPlugins_Click" AutomationProperties.AutomationId="DiscoverSegPlugins" />
-                </StackPanel>
+                <!-- 发现页分栏：内容（Modrinth）与启动器插件（GitHub 商店）。
+                     分段栏 = 圆角底 + 横向按钮行，选中药丸由 SegmentedSwitch 插入并在切换时滑过去。 -->
+                <Grid x:Name="SegBar" HorizontalAlignment="Left" Margin="0,2,0,0">
+                    <Border Background="{StaticResource BrushFillSubtle}" BorderBrush="{StaticResource BrushBorderSubtle}"
+                            BorderThickness="1" CornerRadius="22" IsHitTestVisible="False" />
+                    <StackPanel x:Name="SegRow" Orientation="Horizontal" Spacing="4" Padding="4">
+                        <Button x:Name="SegContent" Content="内容" Style="{StaticResource GhostButton}" Height="34" Padding="16,0"
+                                Click="SegContent_Click" AutomationProperties.AutomationId="DiscoverSegContent" />
+                        <Button x:Name="SegPlugins" Content="启动器插件" Style="{StaticResource GhostButton}" Height="34" Padding="16,0"
+                                Click="SegPlugins_Click" AutomationProperties.AutomationId="DiscoverSegPlugins" />
+                    </StackPanel>
+                </Grid>
 
                 <StackPanel x:Name="ModrinthPanel" Spacing="14">
                     <Border Style="{StaticResource GlassCard}" Padding="26,24">
@@ -102,9 +106,6 @@
                                 </Border>
                                 <TextBlock x:Name="CountText" Text="正在读取内容库" Style="{StaticResource TextSmall}" HorizontalAlignment="Right" />
                             </StackPanel>
-                            <!-- 液态玻璃：顶部 1px 高光，浮在内容之上但不吃点击。 -->
-                            <Rectangle Height="1" Margin="1,0,1,0" VerticalAlignment="Top" HorizontalAlignment="Stretch"
-                                       Fill="{StaticResource BrushGlassHighlight}" RadiusX="1" RadiusY="1" IsHitTestVisible="False" />
                         </Grid>
                     </Border>
 
@@ -114,17 +115,24 @@
 
                     <ScrollViewer HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled" HorizontalScrollMode="Enabled">
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Button x:Name="TypeVanilla" Tag="vanilla" Style="{StaticResource GhostButton}" Height="38" Padding="16,0" Click="Type_Click"
-                                    AutomationProperties.AutomationId="TypeVanilla" AutomationProperties.Name="原版游戏">
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <FontIcon Glyph="&#xE7FC;" FontSize="12" />
-                                    <TextBlock Text="原版游戏" VerticalAlignment="Center" />
+                            <!-- 内容类型也是一条分段栏：药丸跟着当前类型滑动（原版游戏/模组/资源包/光影/整合包）。 -->
+                            <Grid x:Name="TypeSegBar" VerticalAlignment="Center">
+                                <Border Background="{StaticResource BrushFillSubtle}" BorderBrush="{StaticResource BrushBorderSubtle}"
+                                        BorderThickness="1" CornerRadius="22" IsHitTestVisible="False" />
+                                <StackPanel x:Name="TypeSegRow" Orientation="Horizontal" Spacing="4" Padding="4">
+                                    <Button x:Name="TypeVanilla" Tag="vanilla" Style="{StaticResource GhostButton}" Height="34" Padding="16,0" Click="Type_Click"
+                                            AutomationProperties.AutomationId="TypeVanilla" AutomationProperties.Name="原版游戏">
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <FontIcon Glyph="&#xE7FC;" FontSize="12" />
+                                            <TextBlock Text="原版游戏" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Button>
+                                    <Button x:Name="TypeMod" Content="模组" Tag="mod" Style="{StaticResource GhostButton}" Height="34" Padding="16,0" Click="Type_Click" />
+                                    <Button x:Name="TypeResource" Content="资源包" Tag="resourcepack" Style="{StaticResource GhostButton}" Height="34" Padding="16,0" Click="Type_Click" />
+                                    <Button x:Name="TypeShader" Content="光影" Tag="shader" Style="{StaticResource GhostButton}" Height="34" Padding="16,0" Click="Type_Click" />
+                                    <Button x:Name="TypeModpack" Content="整合包" Tag="modpack" Style="{StaticResource GhostButton}" Height="34" Padding="16,0" Click="Type_Click" />
                                 </StackPanel>
-                            </Button>
-                            <Button x:Name="TypeMod" Content="模组" Tag="mod" Style="{StaticResource GhostButton}" Height="38" Padding="16,0" Click="Type_Click" />
-                            <Button x:Name="TypeResource" Content="资源包" Tag="resourcepack" Style="{StaticResource GhostButton}" Height="38" Padding="16,0" Click="Type_Click" />
-                            <Button x:Name="TypeShader" Content="光影" Tag="shader" Style="{StaticResource GhostButton}" Height="38" Padding="16,0" Click="Type_Click" />
-                            <Button x:Name="TypeModpack" Content="整合包" Tag="modpack" Style="{StaticResource GhostButton}" Height="38" Padding="16,0" Click="Type_Click" />
+                            </Grid>
                             <Border x:Name="FilterDivider" Width="1" Background="{StaticResource BrushBorderSubtle}" Margin="4,7" />
                             <ComboBox x:Name="VersionCombo" Width="156" Height="38" VerticalAlignment="Center"
                                       Foreground="{StaticResource BrushText}" Background="{StaticResource BrushField}"
@@ -146,15 +154,26 @@
                     <StackPanel x:Name="ResultsPanel" Spacing="14" MinHeight="360" />
 
                     <Grid x:Name="FooterBar" Margin="0,2,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
                         <TextBlock x:Name="DisplayText" Style="{StaticResource TextSmall}" VerticalAlignment="Center" />
-                        <Button x:Name="LoadMoreButton" HorizontalAlignment="Center" Style="{StaticResource GhostButton}" Height="36" Padding="22,0"
+                        <!--
+                            「加载更多」原来居中放，正好落在音乐台浮动胶囊的位置上，滚到底就被挡住。
+                            胶囊固定在视口底部正中，所以底部的可点元素一律靠右排：按钮在右，来源说明再往右。
+                        -->
+                        <Button x:Name="LoadMoreButton" Grid.Column="2" HorizontalAlignment="Right" Margin="0,0,18,0"
+                                Style="{StaticResource GhostButton}" Height="36" Padding="22,0"
                                 Click="LoadMore_Click" Visibility="Collapsed">
                             <StackPanel Orientation="Horizontal" Spacing="7">
                                 <FontIcon Glyph="&#xE70D;" FontSize="12" />
                                 <TextBlock Text="加载更多" VerticalAlignment="Center" />
                             </StackPanel>
                         </Button>
-                        <TextBlock x:Name="FooterHint" Text="内容由 Modrinth 提供 · 下载前会询问保存位置 · 需要网络连接"
+                        <TextBlock x:Name="FooterHint" Grid.Column="3" Text="内容由 Modrinth 提供 · 下载前会询问保存位置 · 需要网络连接"
                                    Style="{StaticResource TextSmall}" HorizontalAlignment="Right" VerticalAlignment="Center" />
                     </Grid>
 
@@ -183,8 +202,6 @@
                             <Border Style="{StaticResource Pill}" Grid.Column="1" VerticalAlignment="Top" HorizontalAlignment="Right">
                                 <TextBlock Text="开源插件" FontSize="10.5" Foreground="{StaticResource BrushTextSecondary}" />
                             </Border>
-                            <Rectangle Grid.ColumnSpan="2" Height="1" Margin="1,0,1,0" VerticalAlignment="Top" HorizontalAlignment="Stretch"
-                                       Fill="{StaticResource BrushGlassHighlight}" RadiusX="1" RadiusY="1" IsHitTestVisible="False" />
                         </Grid>
                     </Border>
 
@@ -239,8 +256,9 @@
 
                     <StackPanel x:Name="StoreItemsPanel" Spacing="10" />
 
+                    <!-- 同上：不用居中，避免滚到底时被底部居中的音乐台胶囊压住。 -->
                     <Button x:Name="StoreLoadMoreButton" Content="加载更多" Style="{StaticResource GhostButton}" Height="36" Padding="22,0"
-                            HorizontalAlignment="Center" Click="StoreLoadMore_Click" Visibility="Collapsed" />
+                            HorizontalAlignment="Right" Click="StoreLoadMore_Click" Visibility="Collapsed" />
 
                     <StackPanel x:Name="StoreEmptyPanel" Spacing="10" HorizontalAlignment="Center" Margin="0,60,0,60" Visibility="Collapsed">
                         <FontIcon Glyph="&#xE7B8;" FontSize="26" Foreground="{StaticResource BrushTextTertiary}" HorizontalAlignment="Center" />

@@ -5,7 +5,6 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Media.Imaging;
-using Microsoft.UI.Xaml.Shapes;
 using NovaLink.Lumen.Controls;
 using NovaLink.Lumen.Core.Models;
 using NovaLink.Lumen.Services;
@@ -73,6 +72,11 @@ public sealed partial class DiscoverPage : Page
         InitializeComponent();
         // 实验性功能「启动器插件」关闭时，插件商店整栏都不出现，页面固定在「内容」。
         if (!LumenRuntime.PluginsEnabled) SegPlugins.Visibility = Visibility.Collapsed;
+        // 两条分段栏都在这里装好药丸指示器，之后切换只负责把药丸滑过去。
+        SegmentedSwitch.Enable(SegBar);
+        SegmentedSwitch.Select(SegBar, 0, animate: false);
+        SegmentedSwitch.Enable(TypeSegBar);
+        SegmentedSwitch.Select(TypeSegBar, TypeIndex(_type), animate: false);
         _busy = LoadingState.Attach(PageRoot, "正在读取内容…");
         _busy.Hide();
         Loaded += async (_, _) => await InitAsync();
@@ -240,15 +244,21 @@ public sealed partial class DiscoverPage : Page
         await ReloadAsync();
     }
 
+    /// <summary>内容类型在分段栏里的下标，顺序必须和 XAML 里 TypeVanilla…TypeModpack 一致。</summary>
+    private static int TypeIndex(string type) => (type ?? "").ToLowerInvariant() switch
+    {
+        "vanilla" => 0,
+        "resourcepack" => 2,
+        "shader" => 3,
+        "modpack" => 4,
+        _ => 1
+    };
+
     private void UpdateTypeButtons()
     {
-        foreach (var button in new[] { TypeVanilla, TypeMod, TypeResource, TypeShader, TypeModpack })
-        {
-            var active = string.Equals(button.Tag?.ToString(), _type, StringComparison.OrdinalIgnoreCase);
-            button.Background = active ? Res("BrushSelected") : Res("BrushFillSubtle");
-            button.Foreground = active ? Res("BrushMint") : Res("BrushTextSecondary");
-            button.FontWeight = active ? FontWeights.SemiBold : FontWeights.Normal;
-        }
+        // 选中态交给药丸指示器（薄荷色文字 + 100% 不透明度），这里只负责把药丸滑到当前类型。
+        // 不再改字重：字重变化会让按钮宽度抖动，药丸就会在动画途中被重新对齐而跳一下。
+        SegmentedSwitch.Select(TypeSegBar, TypeIndex(_type));
 
         var content = _type is "mod" or "resourcepack" or "shader" or "modpack";
         VersionCombo.Visibility = content ? Visibility.Visible : Visibility.Collapsed;
@@ -284,8 +294,7 @@ public sealed partial class DiscoverPage : Page
             return;
         }
 
-        ShowBusy(query.Length > 0 ? "正在搜索「" + query + "」…" : "正在读取 Modrinth 资源…");
-        ShowSkeleton(query.Length > 0 ? "正在搜索 " + query + " …" : "正在读取内容…");
+        ShowSkeleton(query.Length > 0 ? "正在搜索「" + query + "」…" : "正在读取 Modrinth 资源…");
         EmptyPanel.Visibility = Visibility.Collapsed;
         LoadMoreButton.Visibility = Visibility.Collapsed;
         CountText.Text = "读取中";
@@ -333,7 +342,10 @@ public sealed partial class DiscoverPage : Page
         if (_loading) return;
         _loading = true;
         LoadMoreButton.IsEnabled = false;
-        ShowBusy("正在加载更多内容…");
+        var startIndex = _items.Count;
+        // 等待期间在列表末尾补一行骨架（页面中央不再出现转圈）。
+        var pending = BuildSkeletonRow();
+        ResultsPanel.Children.Add(pending);
         try
         {
             var skip = _items.Count;
@@ -347,12 +359,13 @@ public sealed partial class DiscoverPage : Page
                 if (_items.Any(x => string.Equals(string.IsNullOrWhiteSpace(x.ProjectId) ? x.Slug : x.ProjectId, key, StringComparison.OrdinalIgnoreCase))) continue;
                 _items.Add(item);
             }
-            HideBusy();
-            await RenderItemsAsync(_items, CancellationToken.None);
+            ResultsPanel.Children.Remove(pending);
+            await RenderItemsAsync(_items, CancellationToken.None, startIndex);
             UpdateFooter();
         }
         catch (Exception ex)
         {
+            ResultsPanel.Children.Remove(pending);
             StatusText.Text = "加载更多失败：" + ex.Message;
         }
         finally
@@ -382,24 +395,40 @@ public sealed partial class DiscoverPage : Page
         _ => "模组"
     };
 
+    /// <summary>
+    /// 结果区按最终排版铺骨架（模组/资源包是卡片网格，原版游戏是版本行列表），
+    /// 不再用页面正中那枚转圈：整页只有一套加载反馈，骨架和真实内容尺寸一致，数据到位时不会跳。
+    /// </summary>
     private void ShowSkeleton(string status)
     {
         _skeletonAt = Stopwatch.GetTimestamp();
         ResultsPanel.Children.Clear();
         StatusText.Text = status;
-        for (var rowIndex = 0; rowIndex < 3; rowIndex++)
+        if (_type == "vanilla")
         {
-            var row = new Grid { ColumnSpacing = 14, Height = 228 };
-            for (var c = 0; c < 3; c++)
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            for (var c = 0; c < 3; c++)
+            ResultsPanel.Children.Add(new Border
             {
-                var card = Skeleton.Card();
-                Grid.SetColumn(card, c);
-                row.Children.Add(card);
-            }
-            ResultsPanel.Children.Add(row);
+                Style = (Style)Application.Current.Resources["GlassCard"],
+                Padding = new Thickness(18, 16, 18, 14),
+                Child = Skeleton.VersionList()
+            });
+            return;
         }
+        ResultsPanel.Children.Add(BuildSkeletonRow());
+        ResultsPanel.Children.Add(BuildSkeletonRow());
+    }
+
+    private static Grid BuildSkeletonRow()
+    {
+        var row = new Grid { ColumnSpacing = 14, Height = 228 };
+        for (var c = 0; c < 3; c++)
+        {
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var card = Skeleton.Card();
+            Grid.SetColumn(card, c);
+            row.Children.Add(card);
+        }
+        return row;
     }
 
     private async Task HoldSkeletonAsync()
@@ -415,29 +444,48 @@ public sealed partial class DiscoverPage : Page
     /// 分批搭建卡片：每批 3 行（9 张）后让出一帧，避免一次性建上百张卡片把 UI 线程堵死。
     /// 每次渲染自增 <see cref="_renderToken"/>，过期的一轮会在下一个检查点直接退出。
     /// </summary>
-    private async Task RenderItemsAsync(IReadOnlyList<ModrinthProject> items, CancellationToken ct)
+    private async Task RenderItemsAsync(IReadOnlyList<ModrinthProject> items, CancellationToken ct, int startIndex = 0)
     {
         var token = ++_renderToken;
-        ResultsPanel.Children.Clear();
+        var from = Math.Max(0, startIndex);
+        if (from == 0) ResultsPanel.Children.Clear();
         HideBusy();
-        for (var i = 0; i < items.Count; i += 3)
+        // 追加模式：从已渲染的行之后接着往下建，不再清空整张表。
+        // 之前每次都 Clear 会让内容高度瞬间归零，ScrollViewer 的偏移被夹回 0，
+        // 用户看到的就是「点加载更多后自动滚回顶部」。
+        for (var rowIndex = from / 3; rowIndex * 3 < items.Count; rowIndex++)
         {
             if (token != _renderToken || ct.IsCancellationRequested) return;
-            var row = new Grid { ColumnSpacing = 14, Height = 228 };
-            for (var c = 0; c < 3; c++)
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            for (var c = 0; c < 3 && i + c < items.Count; c++)
+            var i = rowIndex * 3;
+            var row = BuildRow(items, i);
+            if (rowIndex < ResultsPanel.Children.Count)
             {
-                var card = BuildCard(items[i + c]);
-                Grid.SetColumn(card, c);
-                row.Children.Add(card);
+                ResultsPanel.Children.RemoveAt(rowIndex);
+                ResultsPanel.Children.Insert(rowIndex, row);
             }
-            ResultsPanel.Children.Add(row);
+            else
+            {
+                ResultsPanel.Children.Add(row);
+            }
             // 先上屏再入场：行只有在挂进视觉树后动画才会真正跑。
             for (var c = 0; c < row.Children.Count; c++)
                 if (row.Children[c] is FrameworkElement cardElement) Motion.RowIn(cardElement, i + c);
             await UiYield.NextFrameAsync();
         }
+    }
+
+    private Grid BuildRow(IReadOnlyList<ModrinthProject> items, int index)
+    {
+        var row = new Grid { ColumnSpacing = 14, Height = 228 };
+        for (var c = 0; c < 3; c++)
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        for (var c = 0; c < 3 && index + c < items.Count; c++)
+        {
+            var card = BuildCard(items[index + c]);
+            Grid.SetColumn(card, c);
+            row.Children.Add(card);
+        }
+        return row;
     }
 
     private Border BuildCard(ModrinthProject project)
@@ -566,24 +614,8 @@ public sealed partial class DiscoverPage : Page
         return card;
     }
 
-    /// <summary>液态玻璃卡片的统一外壳：内容 + 顶部 1px 高光（高光 IsHitTestVisible=false，不吃点击）。</summary>
-    private static FrameworkElement GlassSurface(UIElement content)
-    {
-        var grid = new Grid();
-        grid.Children.Add(content);
-        grid.Children.Add(new Rectangle
-        {
-            Height = 1,
-            VerticalAlignment = VerticalAlignment.Top,
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            Margin = new Thickness(1, 0, 1, 0),
-            RadiusX = 1,
-            RadiusY = 1,
-            Fill = Res("BrushGlassHighlight"),
-            IsHitTestVisible = false
-        });
-        return grid;
-    }
+    /// <summary>卡片统一外壳：直接返回内容容器（用户要求去掉顶部高光横线）。</summary>
+    private static FrameworkElement GlassSurface(FrameworkElement content) => content;
 
     private static async Task LocalizeAsync(ModrinthProject project, TextBlock badge, TextBlock description)
     {

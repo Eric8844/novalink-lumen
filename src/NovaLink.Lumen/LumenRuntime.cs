@@ -1,3 +1,4 @@
+using NovaLink.Lumen.Controls;
 using NovaLink.Lumen.Core;
 using NovaLink.Lumen.Plugins;
 using NovaLink.Lumen.Services;
@@ -14,6 +15,7 @@ using NovaLink.Lumen.Services.News;
 using NovaLink.Lumen.Services.NovaLink;
 using NovaLink.Lumen.Services.Plugins;
 using NovaLink.Lumen.Services.Plugins.Store;
+using NovaLink.Lumen.Services.Skins;
 using NovaLink.Lumen.Services.Storage;
 using NovaLink.Lumen.Services.Updates;
 using NovaLink.Lumen.Startup;
@@ -50,6 +52,21 @@ public static class LumenRuntime
     public static HeroArtService HeroArt { get; private set; } = null!;
     public static LibraryService Library { get; private set; } = null!;
     public static UpdateService Updates { get; private set; } = null!;
+
+    /// <summary>
+    /// 本次启动的硬件检测结果。glassQuality=auto 时在创建主窗口之前由
+    /// <see cref="InitializeGlassProfile"/> 填好；设置页直接展示它，不再重复扫描。
+    /// </summary>
+    public static HardwareReport? Hardware { get; private set; }
+
+    /// <summary>本次启动最终采用的玻璃画质（auto 时为硬件检测结果映射出的挡位）。</summary>
+    public static GlassQuality GlassQuality { get; private set; } = GlassQuality.Auto;
+
+    /// <summary>
+    /// 账号皮肤贴图（主页 3D 人物用）。负责把账号记录里的本地皮肤、或按 UUID 下载的整张皮肤
+    /// 落到 &lt;DataRoot&gt;\skins\&lt;账号Id&gt;.png；永远不抛异常，拿不到就返回 null（调用方用默认史蒂夫）。
+    /// </summary>
+    public static SkinTextureService Skins { get; private set; } = null!;
 
     /// <summary>
     /// 插件商店（发现页「启动器插件」栏）。数据来自 GitHub 上打了 topic 的开源仓库。
@@ -170,6 +187,7 @@ public static class LumenRuntime
         HeroArt = new HeroArtService(Paths, Http, News);
         Library = new LibraryService(Paths);
         Updates = new UpdateService(Paths, Http);
+        Skins = new SkinTextureService(Http, Paths.Root);
         if (PluginsEnabled)
         {
             Store = new PluginStoreClient(Http, new PluginPaths(Paths.Root)) { LauncherVersion = LauncherVersion };
@@ -177,6 +195,9 @@ public static class LumenRuntime
         }
 
         InitializePlugins(options);
+
+        // 画质挡位必须在创建主窗口之前定下来：AuroraBackdrop 的 GlassSettings 初值读 GlassDefaults。
+        InitializeGlassProfile();
 
         AppLog.Info("app", "NovaLink Lumen 启动，数据目录：" + Paths.Root + "，版本 " + LauncherVersion);
     }
@@ -202,6 +223,72 @@ public static class LumenRuntime
 
     /// <summary>同步兼容入口（脚本/旧调用方）。新代码请用 <see cref="InitializeAsync"/>，否则会阻塞调用线程。</summary>
     public static void Initialize() => InitializeAsync(StartupOptions.FromEnvironment()).GetAwaiter().GetResult();
+
+    // ------------------------------------------------------------------
+    // 画质挡位（硬件检测 + glassQuality 设置 → 玻璃参数）
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// 按设置解析画质挡位，写进 <see cref="GlassDefaults"/> 并记到 <see cref="GlassQuality"/>。
+    /// 之后创建的 AuroraBackdrop 会直接沿用这个挡位；设置页换挡位也走这里，保证两处口径一致。
+    /// </summary>
+    public static GlassQuality ApplyGlassProfile(GlassPreset preset, HardwareReport? report)
+    {
+        // auto 但没有检测结果时保持当前挡位：启动时检测失败已经落到平衡档，
+        // 这里再退回 Auto 会让设置页每次打开都把挡位重置一遍。
+        var quality = preset == GlassPreset.Auto && report is null
+            ? GlassQuality
+            : GlassPresets.Quality(preset, report);
+        GlassQuality = quality;
+        GlassDefaults.Quality = quality;
+        return quality;
+    }
+
+    /// <summary>
+    /// 启动链：解析设置里的 glassQuality。auto 时先检测硬件（正常机器不到 300ms）再定挡位，
+    /// 检测失败按平衡档继续启动；手动挡位不检测，省掉这次开销。
+    /// </summary>
+    public static void InitializeGlassProfile()
+    {
+        var preset = GlassPresets.Parse(Settings.Settings.GlassQuality);
+        if (preset != GlassPreset.Auto)
+        {
+            ApplyGlassProfile(preset, null);
+            AppLog.Info("glass", "画质挡位：" + GlassPresets.Label(preset) + "（来自设置，未做硬件检测）");
+            return;
+        }
+
+        HardwareReport? report = null;
+        try
+        {
+            report = HardwareProfile.Detect();
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("glass", "自动画质检测失败，按平衡档运行：" + ex.Message);
+        }
+
+        Hardware = report;
+        if (report is null)
+        {
+            ApplyGlassProfile(GlassPreset.Balanced, null);
+            AppLog.Warn("glass", "自动画质：检测失败，已按平衡档运行");
+            return;
+        }
+
+        ApplyGlassProfile(GlassPreset.Auto, report);
+        AppLog.Info("glass", "自动画质：" + report.TierLabel + "（" + report.Describe + "）");
+    }
+
+    /// <summary>
+    /// 设置页「重新检测」用：记下这次检测结果并立刻生效（检测失败则按平衡档）。
+    /// 设置字符串由调用方写成 auto 并保存。
+    /// </summary>
+    public static GlassQuality ApplyDetectedHardware(HardwareReport? report)
+    {
+        Hardware = report;
+        return ApplyGlassProfile(report is null ? GlassPreset.Balanced : GlassPreset.Auto, report);
+    }
 
     // ------------------------------------------------------------------
     // 升级防线
@@ -313,6 +400,8 @@ public static class LumenRuntime
                 DevMode = options.DevMode,
                 Host = new LumenPluginHost(),
                 Ui = PluginUiService.Instance,
+                // 主题令牌：颜色取自宿主 ThemeManager，深浅切换时向前台发 Changed 让插件重建画刷。
+                Theme = PluginThemeBridge.Instance,
                 PluginEnabledQuery = IsPluginEnabled
             };
 

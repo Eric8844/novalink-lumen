@@ -20,7 +20,7 @@ namespace NovaLink.Lumen.Services.Storage;
 public static class VersionSourceDetector
 {
     /// <summary>本版本号。与 UpdateService.CurrentVersion（LauncherChannelInfo.BaseVersion）保持一致。</summary>
-    public const string TargetVersion = "1.5.0";
+    public const string TargetVersion = "1.5.1";
 
     /// <summary>lumen.json 里没有 lastSeenVersion 时的源版本推断值：纯 v1.4.0 原生安装。</summary>
     public const string FallbackSourceVersion = "1.4.0";

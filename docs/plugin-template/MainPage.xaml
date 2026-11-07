@@ -3,30 +3,62 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <Grid Padding="32" RowSpacing="14">
+    <!--
+        插件页面不需要自己写颜色和玻璃画刷：
+        1) 写了 x:Name 的元素，在 Loaded 里调 context.Ui.ApplyGlassCard(...) 就会被套上启动器同款玻璃；
+        2) 想让宿主帮你造卡片/按钮，用 context.Ui.CreateGlassCard / CreateGlassButton，放进 ContentControl 里。
+        颜色一律从 context.Theme.Colors 取，深浅主题切换时宿主会发 Theme.Changed。
+    -->
+    <Grid Padding="28" RowSpacing="14">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <TextBlock Grid.Row="0"
-                   Text="示例插件"
-                   FontSize="26"
-                   FontWeight="SemiBold" />
+        <Border x:Name="HeroCard" Grid.Row="0">
+            <StackPanel Spacing="10">
+                <TextBlock x:Name="TitleText"
+                           Text="示例插件"
+                           FontSize="26"
+                           FontWeight="SemiBold" />
 
-        <TextBlock Grid.Row="1"
-                   Text="这个页面来自一个独立编译的插件程序集，它自己的 XAML 与 .pri 资源在运行时被加载。"
-                   TextWrapping="Wrap"
-                   Opacity="0.72" />
+                <TextBlock x:Name="ThemeText"
+                           TextWrapping="Wrap"
+                           Opacity="0.72" />
+
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <Border x:Name="AccentSwatch"
+                            Width="34"
+                            Height="18"
+                            CornerRadius="9" />
+                    <TextBlock x:Name="AccentText"
+                               VerticalAlignment="Center"
+                               Opacity="0.72" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- 宿主造的玻璃卡片：内容是插件给的，样式与主题跟随由宿主负责 -->
+        <ContentControl x:Name="GlassCardHost" Grid.Row="1" />
 
         <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="10">
             <Button x:Name="PingButton" Content="测试宿主 API" Click="OnPingClick" />
-            <TextBlock x:Name="StatusText" VerticalAlignment="Center" Opacity="0.72" />
+            <!-- 宿主造的胶囊玻璃按钮 -->
+            <ContentControl x:Name="GlassButtonHost" VerticalAlignment="Center" />
+            <TextBlock x:Name="StatusText"
+                       VerticalAlignment="Center"
+                       Opacity="0.72" />
         </StackPanel>
 
-        <TextBlock Grid.Row="3"
+        <Border x:Name="InfoCard" Grid.Row="3">
+            <TextBlock TextWrapping="Wrap"
+                       Text="这张说明卡也是用 ApplyGlassCard 套上玻璃的：Round 圆角、半透明底、1px 描边、边缘折射和悬停高光全部由启动器负责，浅色主题下会自动换成浅色配方。" />
+        </Border>
+
+        <TextBlock Grid.Row="4"
                    TextWrapping="Wrap"
                    Opacity="0.5"
                    VerticalAlignment="Bottom"

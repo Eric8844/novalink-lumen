@@ -37,6 +37,7 @@ public sealed partial class HomePage : Page
     private CancellationTokenSource? _greetingCts;
     private CancellationTokenSource? _taglineCts;
     private CancellationTokenSource? _heroArtCts;
+    private CancellationTokenSource? _skinCts;
     private string _lastGreeting = "";
     private string _lastTagline = "";
     private string _taglineLoadingVersion = "";
@@ -163,7 +164,6 @@ public sealed partial class HomePage : Page
             UpdatePlayState(LumenRuntime.Launch.State);
             await RenderNewsAsync(false, token);
             if (token != _renderToken) return;
-            UpdateJavaChip();
             DispatcherQueue.TryEnqueue(() => GlassPanes.Track(this));
         }
         catch (Exception ex)
@@ -378,6 +378,9 @@ public sealed partial class HomePage : Page
             AccountInitialHome.Text = "N";
             HomeAvatar.Source = null;
             HomeAvatar.Visibility = Visibility.Collapsed;
+            _skinCts?.Cancel();
+            AccountModel.Slim = false;
+            AccountModel.UseDefaultSkin();
             return;
         }
 
@@ -393,6 +396,50 @@ public sealed partial class HomePage : Page
             HomeAvatar.Source = string.IsNullOrWhiteSpace(account.AvatarUrl) ? null : new BitmapImage(new Uri(account.AvatarUrl));
         }
         catch { HomeAvatar.Source = null; }
+
+        // 3D 人物要的是完整账号记录（皮肤路径 / UUID / 皮肤变体），公开投影里没有这些字段。
+        var record = LumenRuntime.Accounts.Selected;
+        if (record is not null) _ = LoadAccountSkinAsync(record);
+    }
+
+    /// <summary>
+    /// 把当前账号的皮肤喂给 3D 人物：先用记录里已有的本地皮肤（离线账号上传的 / 之前缓存过的）
+    /// 立刻上屏，再等 <see cref="LumenRuntime.Skins"/> 按 UUID 拉到整张皮肤后换上去。
+    /// 任何一步失败都保持当前画面，最终默认是内置史蒂夫。
+    /// </summary>
+    private async Task LoadAccountSkinAsync(AccountRecord account)
+    {
+        _skinCts?.Cancel();
+        var cts = new CancellationTokenSource();
+        _skinCts = cts;
+
+        try
+        {
+            AccountModel.Slim = IsSlimSkin(account);
+
+            var local = account.SkinPath;
+            if (!string.IsNullOrWhiteSpace(local) && File.Exists(local))
+                await AccountModel.LoadSkinAsync(local);
+            else
+                AccountModel.UseDefaultSkin();
+
+            var path = await LumenRuntime.Skins.EnsureAsync(account, cts.Token);
+            if (cts.IsCancellationRequested || path is null) return;
+            await AccountModel.LoadSkinAsync(path);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("skin", "加载主页人物皮肤失败：" + ex.Message);
+        }
+    }
+
+    private static bool IsSlimSkin(AccountRecord account)
+    {
+        var variant = account.Skins?.FirstOrDefault()?.Variant;
+        return variant is not null && variant.Contains("slim", StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task RenderVersionsAsync(int token)
@@ -587,8 +634,6 @@ public sealed partial class HomePage : Page
             if (++built % RenderBatchSize == 0) await UiYield.NextFrameAsync();
         }
     }
-
-    private void UpdateJavaChip() => _ = ShellPage.Current?.RefreshJavaAsync();
 
 
     private static string FriendlyDate(string date)

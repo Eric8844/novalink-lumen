@@ -1,0 +1,29 @@
+{
+    "schema":  1,
+    "version":  "1.5.0",
+    "archivedAtUtc":  "2026-11-07T06:37:21Z",
+    "gitTag":  "v1.5.0",
+    "gitCommit":  "b3dd3f508e4ef1ea557b9a328848aaf4af0a6ba4",
+    "installer":  {
+                      "name":  "NovaLinkLumen-WinUI-Setup-1.5.0.exe",
+                      "bytes":  69297059,
+                      "sha256":  "3818225BD4E17076AB9A0014DBF78E0B4025C42712DEB03346BB2CA8ACFB02E5"
+                  },
+    "sourceArchive":  {
+                          "name":  "source-1.5.0.tar.gz",
+                          "sha256":  "4DE490AA17EF22D5F7876654A0F0F821876DEDF13841088F0BEF382FAA12D408"
+                      },
+    "releaseTree":  {
+                        "files":  545,
+                        "totalBytes":  254181479,
+                        "fingerprintSha256":  "E9B9967F48DD8CE1C2DB0C45CC37AC0B7D369036F66084AF4B2C338772E13D7D"
+                    },
+    "buildHost":  {
+                      "dotnetSdk":  "10.0.403",
+                      "rid":  "win-x64",
+                      "nsis":  "unknown",
+                      "platform":  "x64"
+                  },
+    "githubRelease":  "https://github.com/Eric8844/novalink-lumen-releases/releases/tag/v1.5.0",
+    "notes":  "由 scripts/archive-release.ps1 生成；本文件存在即表示归档完成"
+}

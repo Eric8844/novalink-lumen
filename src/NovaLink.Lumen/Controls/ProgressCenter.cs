@@ -1,6 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Text;
+using System.Text.Json;
+using NovaLink.Lumen.Core;
 using NovaLink.Lumen.Services;
 
 namespace NovaLink.Lumen.Controls;
@@ -59,16 +63,151 @@ public sealed class ProgressTask
     }
 }
 
+/// <summary>一条已经结束、并且日志已经写进历史文件的任务记录。</summary>
+public sealed class ProgressHistoryEntry
+{
+    public string Id { get; init; } = "";
+    public string Title { get; init; } = "";
+    public string Kind { get; init; } = "";
+    public string Status { get; init; } = "";
+    public string Message { get; init; } = "";
+    public string LogFile { get; init; } = "";
+    public DateTimeOffset StartedAt { get; init; }
+    public DateTimeOffset FinishedAt { get; init; }
+    public long Bytes { get; init; }
+    public long Total { get; init; }
+
+    public string TimeText => StartedAt.LocalDateTime.ToString("MM-dd HH:mm");
+    public string LineText => TimeText + " · " + Title + (string.IsNullOrWhiteSpace(Status) ? "" : " · " + Status);
+}
+
+/// <summary>所有进行中任务合计出来的总进度（下载与启动共用一条）。</summary>
+public sealed record ProgressAggregate(int Count, double Percent, long Bytes, long Total, double Speed, bool Indeterminate);
+
 /// <summary>Mirrors the Electron activity stream: tasks, dock and the 进度显示 overlay.</summary>
 public static class ProgressCenter
 {
     private static readonly object Gate = new();
     private static readonly List<ProgressTask> Tasks = new();
+    private static readonly List<ProgressHistoryEntry> History = new();
     private static string? _selectedId;
     private static DateTime _lastBytesAt;
     private static long _lastBytes;
+    private static bool _historyLoaded;
 
     public static event Action? Changed;
+
+    private static string HistoryDirectory => Path.Combine(
+        AppLog.LogDirectory ?? Path.Combine(AppPaths.DefaultRoot, "logs"), "progress");
+    private static string HistoryIndex => Path.Combine(HistoryDirectory, "history.jsonl");
+
+    /// <summary>所有进行中任务合计出来的总进度；dock、进度显示和标题栏都读它。</summary>
+    public static ProgressAggregate Aggregate()
+    {
+        lock (Gate)
+        {
+            var active = Tasks.Where(t => t.Status is ProgressStatus.Active or ProgressStatus.Stopping).ToList();
+            if (active.Count == 0) return new ProgressAggregate(0, 0, 0, 0, 0, true);
+            var bytes = active.Sum(t => t.Bytes);
+            var total = active.Sum(t => t.Total);
+            var speed = active.Sum(t => t.Speed);
+            // 启动任务是按阶段报百分比的，没有字节分母；只有连百分比都没有时才算「不确定进度」。
+            var indeterminate = total <= 0 && active.All(t => t.Indeterminate);
+            var percent = total > 0
+                ? Math.Clamp(bytes * 100.0 / total, 0, 100)
+                : Math.Clamp(active.Average(t => t.Percent ?? 0), 0, 100);
+            return new ProgressAggregate(active.Count, percent, bytes, total, speed, indeterminate);
+        }
+    }
+
+    /// <summary>已结束任务的日志索引（新在前），来自 logs/progress/history.jsonl。</summary>
+    public static IReadOnlyList<ProgressHistoryEntry> HistorySnapshot()
+    {
+        EnsureHistoryLoaded();
+        lock (Gate) return History.ToList();
+    }
+
+    private static void EnsureHistoryLoaded()
+    {
+        lock (Gate)
+        {
+            if (_historyLoaded) return;
+            _historyLoaded = true;
+            try
+            {
+                if (!File.Exists(HistoryIndex)) return;
+                var lines = File.ReadAllLines(HistoryIndex);
+                foreach (var line in lines.Reverse())
+                {
+                    if (string.IsNullOrWhiteSpace(line)) continue;
+                    try
+                    {
+                        var entry = JsonSerializer.Deserialize<ProgressHistoryEntry>(line);
+                        if (entry is null || string.IsNullOrWhiteSpace(entry.Id)) continue;
+                        History.Add(entry);
+                        if (History.Count >= 100) break;
+                    }
+                    catch { }
+                }
+            }
+            catch (Exception ex) { AppLog.Warn("progress", "读取历史日志索引失败：" + ex.Message); }
+        }
+    }
+
+    /// <summary>
+    /// 把结束的任务写成 logs/progress/&lt;时间&gt;-&lt;id&gt;.log，并在 history.jsonl 里留一行索引。
+    /// 运行实例关闭、下载结束都会走这里，所以任务记录可以从列表里删掉，日志不会丢。
+    /// </summary>
+    private static void Archive(ProgressTask task)
+    {
+        try
+        {
+            Directory.CreateDirectory(HistoryDirectory);
+            var stamp = task.StartedAt.ToString("yyyyMMdd-HHmmss");
+            var safeId = new string(task.Id.Select(ch => char.IsLetterOrDigit(ch) ? ch : '-').ToArray());
+            if (safeId.Length > 60) safeId = safeId[..60];
+            var file = Path.Combine(HistoryDirectory, stamp + "-" + safeId + ".log");
+
+            var builder = new StringBuilder();
+            builder.AppendLine("# NovaLink Lumen 进度日志");
+            builder.AppendLine("任务：" + task.Title + "（" + task.Id + "）");
+            builder.AppendLine("类型：" + task.Kind + " · 状态：" + task.StatusText);
+            builder.AppendLine("开始：" + task.StartedAt.ToString("yyyy-MM-dd HH:mm:ss") +
+                               " · 结束：" + (task.FinishedAt ?? DateTimeOffset.Now).ToString("yyyy-MM-dd HH:mm:ss"));
+            var size = ProgressTask.FormatBytes(task.Bytes);
+            if (task.Total > 0) size += " / " + ProgressTask.FormatBytes(task.Total);
+            builder.AppendLine("耗时：" + task.ElapsedText + " · 已下载：" + size);
+            builder.AppendLine("结果：" + task.Message);
+            builder.AppendLine(new string('-', 64));
+            foreach (var line in task.Logs) builder.AppendLine(line);
+            File.WriteAllText(file, builder.ToString(), new UTF8Encoding(false));
+
+            var entry = new ProgressHistoryEntry
+            {
+                Id = task.Id,
+                Title = task.Title,
+                Kind = task.Kind,
+                Status = task.StatusText,
+                Message = task.Message,
+                LogFile = file,
+                StartedAt = task.StartedAt,
+                FinishedAt = task.FinishedAt ?? DateTimeOffset.Now,
+                Bytes = task.Bytes,
+                Total = task.Total
+            };
+            lock (Gate)
+            {
+                History.Insert(0, entry);
+                if (History.Count > 100) History.RemoveRange(100, History.Count - 100);
+            }
+            File.AppendAllText(HistoryIndex, JsonSerializer.Serialize(entry) + Environment.NewLine,
+                new UTF8Encoding(false));
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("progress", "写入进度历史日志失败：" + ex.Message);
+        }
+    }
 
     public static IReadOnlyList<ProgressTask> Snapshot()
     {
@@ -190,8 +329,13 @@ public static class ProgressCenter
         Changed?.Invoke();
     }
 
-    public static void Finish(string id, string message, bool failed = false, bool cancelled = false)
+    /// <param name="remove">
+    /// true = 结束的同时把任务从列表里删掉（运行中的实例被关闭时用），日志先归档到历史日志；
+    /// false = 保留「已完成」记录，同样会写一份历史日志。
+    /// </param>
+    public static void Finish(string id, string message, bool failed = false, bool cancelled = false, bool remove = false)
     {
+        ProgressTask? finished = null;
         lock (Gate)
         {
             var task = Tasks.FirstOrDefault(t => t.Id == id);
@@ -203,7 +347,14 @@ public static class ProgressCenter
             task.Cancelable = false;
             if (!failed) { task.Percent = 100; task.Indeterminate = false; }
             if (failed) task.Logs.Add(message);
+            finished = task;
+            if (remove)
+            {
+                Tasks.RemoveAll(t => t.Id == id);
+                if (_selectedId == id) _selectedId = Tasks.FirstOrDefault()?.Id;
+            }
         }
+        if (finished is not null) Archive(finished);
         Changed?.Invoke();
     }
 

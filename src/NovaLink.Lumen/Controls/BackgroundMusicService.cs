@@ -46,6 +46,7 @@ public sealed class BackgroundMusicService : IDisposable
     private int _channels = 2;
     private int _index = -1;
     private string _mode = "list";
+    private TimeSpan _pendingSeek = TimeSpan.MinValue;
     // 自己记住音量：MediaPlayer.Volume 在音源还没挂上时读回来可能是 0，
     // 直接用 getter 回显会把界面滑块打成 0%，还会把 0 写回设置。
     private double _volume = 1;
@@ -68,6 +69,8 @@ public sealed class BackgroundMusicService : IDisposable
         _player.MediaEnded += (_, _) => OnEnded();
         _player.MediaFailed += (_, _) => OnFailed();
         _player.PlaybackSession.PlaybackStateChanged += (_, _) => Notify();
+        // 媒体还没解析出时长时 Seek 会被丢掉，所以把「要跳到的位置」先记着，等 MediaOpened 再补。
+        _player.MediaOpened += (_, _) => ApplyPendingSeek();
 
         for (var i = 0; i < FftSize; i++)
             _window[i] = 0.5f - 0.5f * MathF.Cos(2f * MathF.PI * i / (FftSize - 1));
@@ -141,11 +144,34 @@ public sealed class BackgroundMusicService : IDisposable
         Notify();
     }
 
-    public void PlayIndex(int index, bool autoplay = true)
+    public void PlayIndex(int index, bool autoplay = true, TimeSpan startAt = default)
     {
         if (_tracks.Count == 0) return;
         _index = Math.Clamp(index, 0, _tracks.Count - 1);
+        _pendingSeek = startAt > TimeSpan.Zero ? startAt : TimeSpan.MinValue;
         PlayCurrent(autoplay);
+    }
+
+    /// <summary>媒体源就绪后再把「上次听到的位置」补上；没有待跳转位置时什么也不做。</summary>
+    private void ApplyPendingSeek()
+    {
+        if (_pendingSeek == TimeSpan.MinValue) return;
+        var target = _pendingSeek;
+        _pendingSeek = TimeSpan.MinValue;
+        try
+        {
+            var session = _player.PlaybackSession;
+            if (session is null) return;
+            var duration = session.NaturalDuration;
+            if (duration > TimeSpan.Zero && target > duration) target = duration;
+            if (target < TimeSpan.Zero) target = TimeSpan.Zero;
+            session.Position = target;
+            Notify();
+        }
+        catch
+        {
+            // 位置恢复失败不影响播放，静默忽略。
+        }
     }
 
     public void Stop()
@@ -258,8 +284,18 @@ public sealed class BackgroundMusicService : IDisposable
         try
         {
             _player.Source = MediaSource.CreateFromUri(new Uri(CurrentPath));
-            if (autoplay) _player.Play();
-            _ = StartAnalyzerAsync(CurrentPath);
+            if (autoplay)
+            {
+                _player.Play();
+                _ = StartAnalyzerAsync(CurrentPath);
+            }
+            else
+            {
+                // 只是把曲目挂上去（例如启动时恢复上次那首、但上次是暂停状态），绝不能顺手建频谱分析器：
+                // 分析器是**另一条独立的 AudioGraph 播放**，输出增益置 0 所以听不见，但取样照旧在跑，
+                // 结果就是「音乐没响，背景方块却跟着律动」。没有声音就不该有频谱。
+                StopAnalyzer();
+            }
             Notify();
         }
         catch
@@ -268,10 +304,31 @@ public sealed class BackgroundMusicService : IDisposable
         }
     }
 
-    private async Task StartAnalyzerAsync(string path)
+    /// <summary>
+    /// 切歌时最容易卡：AudioGraph 创建、打开输出设备、把整首歌重新解码一遍，
+    /// 之前这些 await 都回到 UI 线程上继续跑，表现就是「切歌整个启动器顿一下」。
+    /// 现在建图与销毁旧图都放到线程池，UI 线程只负责换 MediaPlayer 的源。
+    /// </summary>
+    private Task StartAnalyzerAsync(string path)
     {
         var generation = Interlocked.Increment(ref _analyzerGeneration);
-        DisposeAnalyzer();
+        var graph = _graph;
+        var input = _audioInput;
+        var frame = _frameOutput;
+        var device = _deviceOutput;
+        _graph = null;
+        _audioInput = null;
+        _frameOutput = null;
+        _deviceOutput = null;
+        return Task.Run(async () =>
+        {
+            DisposeGraph(graph, input, frame, device);
+            await BuildAnalyzerAsync(path, generation).ConfigureAwait(false);
+        });
+    }
+
+    private async Task BuildAnalyzerAsync(string path, int generation)
+    {
 
         AudioGraph? graph = null;
         AudioDeviceOutputNode? device = null;

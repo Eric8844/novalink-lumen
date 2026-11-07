@@ -21,7 +21,7 @@ public enum LauncherChannel
 public static class LauncherChannelInfo
 {
     /// <summary>数值版本号（比较与 User-Agent 用，不带 Preview 字样）。</summary>
-    public const string BaseVersion = "1.5.0";
+    public const string BaseVersion = "1.5.1";
 
     /// <summary>当前编译通道。</summary>
     public static LauncherChannel Current

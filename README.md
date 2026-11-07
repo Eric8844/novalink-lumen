@@ -4,7 +4,7 @@ NovaLink Lumen 是 NovaLink 系列的 Minecraft Java Edition 启动器，使用 
 
 它把版本管理、模组与整合包、账户、下载、论坛和个性化外观放在同一个桌面界面里，同时保留 Minecraft 原有的游戏目录与数据。
 
-- 当前版本：**V1.5.0**（正式版；测试版通道说明见 [docs/PREVIEW.md](docs/PREVIEW.md)）
+- 当前版本：**V1.5.1**（正式版；测试版通道说明见 [docs/PREVIEW.md](docs/PREVIEW.md)）
 - 系统：Windows 10 19041+ / Windows 11，x64
 - 运行环境：自包含发布，安装包已包含 .NET 与 Windows App SDK 运行时
 - 许可证：MIT

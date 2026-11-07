@@ -32,16 +32,16 @@
     <DefineConstants Condition="'$(NovaLinkChannel)' == 'Preview'">$(DefineConstants);NOVALINK_PREVIEW</DefineConstants>
     <!-- 程序集版本与文件版本必须是纯数字（NSIS 与 Windows 属性页都只认 4 段），
          通道信息走 InformationalVersion，不污染 AssemblyVersion。 -->
-    <AssemblyVersion>1.5.0.0</AssemblyVersion>
-    <FileVersion>1.5.0.0</FileVersion>
-    <ApplicationVersion>1.5.0.0</ApplicationVersion>
-    <Version>1.5.0</Version>
-    <InformationalVersion>1.5.0</InformationalVersion>
+    <AssemblyVersion>1.5.1.0</AssemblyVersion>
+    <FileVersion>1.5.1.0</FileVersion>
+    <ApplicationVersion>1.5.1.0</ApplicationVersion>
+    <Version>1.5.1</Version>
+    <InformationalVersion>1.5.1</InformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.6.4" />
-    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.9457" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2270" />
     <PackageReference Include="Microsoft.Graphics.Win2D" Version="1.4.0" />
     <!-- 运行时加载插件自带的 .pri（插件编译型 XAML，T1）。它的 build targets 里 winmd 路径写错，
          所以不能依赖自动接线：这里用 PackageReference 只取投影 DLL 与原生组件，见第三部分手工引用。 -->
@@ -60,10 +60,15 @@
       <HintPath>$(PkgDynamicXaml_WinUI)\lib\net8.0-windows10.0.19041.0\DynamicXaml.WinUI.Projection.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <Content Include="$(PkgDynamicXaml_WinUI)\runtimes\win-x64\native\DynamicXaml.WinUI.dll"
-             Link="DynamicXaml.WinUI.dll"
-             CopyToOutputDirectory="PreserveNewest"
-             CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="$(PkgDynamicXaml_WinUI)\runtimes\win-x64\native\DynamicXaml.WinUI.dll" Link="DynamicXaml.WinUI.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- 插件文档：弹窗里的正文直接嵌入仓库文档，避免 docs/ 与界面两份内容走样。
+       开发文档就是 docs/PLUGINS.md 原文；使用文档是玩家向的 usage.md。 -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\docs\PLUGINS.md" Link="Assets\docs\development.md" LogicalName="NovaLink.Lumen.Assets.docs.development.md" />
+    <EmbeddedResource Include="Assets\docs\usage.md" LogicalName="NovaLink.Lumen.Assets.docs.usage.md" />
+    <Content Remove="Assets\docs\usage.md" />
   </ItemGroup>
 
   <ItemGroup>

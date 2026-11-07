@@ -259,15 +259,19 @@ public sealed class GlassModal
     /// <summary>液态玻璃底：优先用主题里的 Acrylic 画刷（BrushGlassLiquid），取不到时退回卡片底色。</summary>
     public static Brush GlassLiquidBrush() => ThemeManager.Brush("BrushGlassLiquid", ThemeManager.CardSurface);
 
-    /// <summary>玻璃顶部一道 1~1.5px 的高光，跟容器同圆角、不参与命中测试；浮层/卡片都可复用。</summary>
+    /// <summary>
+    /// 液态玻璃顶部的一层柔光：从顶端往下淡出的竖向渐变，跟容器同圆角、不参与命中测试。
+    /// 不再画 1px 硬横线（那种横线在卡片上会被看成多出来的一条分隔线），
+    /// 参数 <paramref name="thickness"/> 表示光带高度；传 1~2 这种旧值时按默认 60px 处理。
+    /// </summary>
     public static Border TopHighlight(double cornerRadius, double thickness = 1.5) => new()
     {
-        Height = thickness,
+        Height = thickness <= 2 ? 60 : thickness,
         Margin = new Thickness(1, 0, 1, 0),
         HorizontalAlignment = HorizontalAlignment.Stretch,
         VerticalAlignment = VerticalAlignment.Top,
         CornerRadius = new CornerRadius(cornerRadius),
-        Background = ThemeManager.Brush("BrushGlassHighlight", ThemeManager.CardBorder),
+        Background = ThemeManager.Brush("BrushGlassTopBand", ThemeManager.CardBorder),
         IsHitTestVisible = false
     };
 

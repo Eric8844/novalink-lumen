@@ -5,7 +5,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Background="Transparent">
 
-    <Grid Margin="0,72,0,0">
+    <Grid x:Name="PageRoot" Margin="0,72,0,0">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -79,7 +79,7 @@
                 </StackPanel>
             </Border>
 
-            <ScrollViewer x:Name="SettingsScroll" Grid.Column="1" Style="{StaticResource PageScroll}" Padding="0,0,12,20" IsScrollInertiaEnabled="False" ViewChanging="SettingsScroll_ViewChanging" ViewChanged="SettingsScroll_ViewChanged">
+            <ScrollViewer x:Name="SettingsScroll" Grid.Column="1" Style="{StaticResource PageScroll}" Padding="0,0,12,20">
                 <Grid x:Name="SettingsPanelHost">
                     <StackPanel x:Name="AccountsPanel" Spacing="16">
                         <Border Style="{StaticResource GlassCard}">
@@ -102,6 +102,14 @@
                                             <StackPanel Orientation="Horizontal" Spacing="6">
                                                 <FontIcon Glyph="&#xE8D7;" FontSize="12" />
                                                 <TextBlock Text="Microsoft" FontSize="12.5" />
+                                            </StackPanel>
+                                        </Button>
+                                        <Button x:Name="AddLittleSkinButton" AutomationProperties.AutomationId="AddLittleSkinButton"
+                                                Style="{StaticResource GhostButton}" Height="38" Padding="14,0" Click="AddLittleSkin_Click"
+                                                ToolTipService.ToolTip="使用 LittleSkin 皮肤站的账号登录">
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <FontIcon Glyph="&#xE8D7;" FontSize="12" />
+                                                <TextBlock Text="LittleSkin" FontSize="12.5" />
                                             </StackPanel>
                                         </Button>
                                         <Button x:Name="AddNovalinkButton" AutomationProperties.AutomationId="AddNovalinkButton"
@@ -449,54 +457,72 @@
                         </Border>
                         <Border Style="{StaticResource GlassCard}">
                             <StackPanel Spacing="14">
-                                <TextBlock Text="液态玻璃引擎" Style="{StaticResource TextSectionTitle}" />
-                                <TextBlock Text="Win2D 折射、色散、菲涅尔边缘与镜面高光。参数实时生效，4K 下会自动降低采样并限制帧率。"
+                                <TextBlock Text="玻璃材质" Style="{StaticResource TextSectionTitle}" />
+                                <TextBlock Text="背景与卡片共用一次模糊采样（Lens 风格的薄白雾 + 1px 内高光 + 柔影），不再逐卡折射。参数实时生效，窗口很大时会自动降低采样。"
                                            Style="{StaticResource TextBody}" />
-                                <Grid ColumnSpacing="12">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel Spacing="6">
-                                        <TextBlock Text="画质自适应" Style="{StaticResource TextSmall}" />
-                                        <ComboBox x:Name="GlassQualityCombo" Width="220" Height="36" HorizontalAlignment="Left"
-                                                  Foreground="{StaticResource BrushText}" Background="{StaticResource BrushField}"
-                                                  BorderBrush="{StaticResource BrushFieldBorder}"
-                                                  AutomationProperties.AutomationId="GlassQualityCombo" SelectionChanged="GlassQuality_Changed">
-                                            <ComboBoxItem Content="自动（推荐）" Tag="Auto" IsSelected="True" />
-                                            <ComboBoxItem Content="高品质" Tag="High" />
-                                            <ComboBoxItem Content="均衡" Tag="Balanced" />
-                                            <ComboBoxItem Content="轻量" Tag="Light" />
-                                            <ComboBoxItem Content="省电" Tag="Saver" />
-                                            <ComboBoxItem Content="关闭玻璃" Tag="Off" />
-                                        </ComboBox>
+                                <StackPanel Spacing="10">
+                                    <Grid ColumnSpacing="12">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Spacing="8">
+                                            <TextBlock Text="画质挡位" Style="{StaticResource TextSmall}" />
+                                            <Border Background="{StaticResource BrushFillSubtle}" BorderBrush="{StaticResource BrushBorderSubtle}"
+                                                    BorderThickness="1" CornerRadius="12" Padding="3" HorizontalAlignment="Left">
+                                                <StackPanel Orientation="Horizontal" Spacing="2">
+                                                    <Button x:Name="GlassPresetAuto" Tag="auto" Content="自动"
+                                                            Background="Transparent" BorderThickness="0" CornerRadius="9"
+                                                            Foreground="{StaticResource BrushTextSecondary}" FontSize="12.5"
+                                                            Height="32" Padding="16,0" MinWidth="0"
+                                                            HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                                            AutomationProperties.AutomationId="GlassPresetAuto" Click="GlassPreset_Click" />
+                                                    <Button x:Name="GlassPresetHigh" Tag="high" Content="质量"
+                                                            Background="Transparent" BorderThickness="0" CornerRadius="9"
+                                                            Foreground="{StaticResource BrushTextSecondary}" FontSize="12.5"
+                                                            Height="32" Padding="16,0" MinWidth="0"
+                                                            HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                                            AutomationProperties.AutomationId="GlassPresetHigh" Click="GlassPreset_Click" />
+                                                    <Button x:Name="GlassPresetBalanced" Tag="balanced" Content="平衡"
+                                                            Background="Transparent" BorderThickness="0" CornerRadius="9"
+                                                            Foreground="{StaticResource BrushTextSecondary}" FontSize="12.5"
+                                                            Height="32" Padding="16,0" MinWidth="0"
+                                                            HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                                            AutomationProperties.AutomationId="GlassPresetBalanced" Click="GlassPreset_Click" />
+                                                    <Button x:Name="GlassPresetPerformance" Tag="performance" Content="性能"
+                                                            Background="Transparent" BorderThickness="0" CornerRadius="9"
+                                                            Foreground="{StaticResource BrushTextSecondary}" FontSize="12.5"
+                                                            Height="32" Padding="16,0" MinWidth="0"
+                                                            HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                                            AutomationProperties.AutomationId="GlassPresetPerformance" Click="GlassPreset_Click" />
+                                                    <Button x:Name="GlassPresetOff" Tag="off" Content="关闭"
+                                                            Background="Transparent" BorderThickness="0" CornerRadius="9"
+                                                            Foreground="{StaticResource BrushTextSecondary}" FontSize="12.5"
+                                                            Height="32" Padding="16,0" MinWidth="0"
+                                                            HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                                            AutomationProperties.AutomationId="GlassPresetOff" Click="GlassPreset_Click" />
+                                                </StackPanel>
+                                            </Border>
+                                        </StackPanel>
+                                        <Button x:Name="GlassRescanButton" Grid.Column="1" Content="重新检测" Style="{StaticResource GhostButton}"
+                                                Height="34" Padding="12,0" VerticalAlignment="Bottom"
+                                                AutomationProperties.AutomationId="GlassRescanButton" Click="GlassRescan_Click" />
+                                    </Grid>
+                                    <StackPanel x:Name="GlassScanPanel" Spacing="6" Visibility="Collapsed">
+                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                            <ProgressRing x:Name="GlassScanRing" Width="16" Height="16" IsActive="False"
+                                                          Foreground="{StaticResource BrushTextSecondary}" />
+                                            <TextBlock x:Name="GlassScanStep" Text="正在检测硬件配置…" Style="{StaticResource TextSmall}"
+                                                       VerticalAlignment="Center" />
+                                        </StackPanel>
+                                        <TextBlock x:Name="GlassScanDetail" Style="{StaticResource TextSmall}" TextWrapping="Wrap" />
                                     </StackPanel>
-                                    <TextBlock x:Name="GlassQualityHint" Grid.Column="1" Text="自动 · 按窗口面积与帧率调节" Style="{StaticResource TextSmall}" VerticalAlignment="Bottom" Margin="0,0,0,8" />
-                                </Grid>
-                                <Grid ColumnSpacing="12">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="56" />
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel Spacing="4">
-                                        <TextBlock Text="折射强度" Style="{StaticResource TextSmall}" />
-                                        <Slider x:Name="RefractionSlider" Minimum="0" Maximum="2.4" StepFrequency="0.1" Value="1"
-                                                Tag="RefFactor" ValueChanged="GlassSlider_Changed" />
-                                    </StackPanel>
-                                    <TextBlock x:Name="RefractionValue" Grid.Column="1" Text="1.0" Style="{StaticResource TextSmall}" VerticalAlignment="Bottom" Margin="0,0,0,8" />
-                                </Grid>
-                                <Grid ColumnSpacing="12">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="56" />
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel Spacing="4">
-                                        <TextBlock Text="色散" Style="{StaticResource TextSmall}" />
-                                        <Slider x:Name="DispersionSlider" Minimum="0" Maximum="2.4" StepFrequency="0.1" Value="1"
-                                                Tag="RefDispersion" ValueChanged="GlassSlider_Changed" />
-                                    </StackPanel>
-                                    <TextBlock x:Name="DispersionValue" Grid.Column="1" Text="1.0" Style="{StaticResource TextSmall}" VerticalAlignment="Bottom" Margin="0,0,0,8" />
-                                </Grid>
+                                    <Border x:Name="GlassResultChip" Style="{StaticResource Pill}" HorizontalAlignment="Left" Visibility="Collapsed">
+                                        <TextBlock x:Name="GlassResultText" Style="{StaticResource TextSmall}" TextWrapping="Wrap" />
+                                    </Border>
+                                    <TextBlock x:Name="GlassQualityHint" Text="自动 · 启动时按当前硬件选择挡位，也可以随时重新检测"
+                                               Style="{StaticResource TextSmall}" TextWrapping="Wrap" />
+                                </StackPanel>
                                 <Grid ColumnSpacing="12">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
@@ -521,7 +547,7 @@
                                     </StackPanel>
                                     <TextBlock x:Name="GlareValue" Grid.Column="1" Text="0.70" Style="{StaticResource TextSmall}" VerticalAlignment="Bottom" Margin="0,0,0,8" />
                                 </Grid>
-                                <TextBlock Text="折射会取样卡片背后的场景；关闭玻璃后只保留背景星空，几乎不占用 GPU。"
+                                <TextBlock Text="玻璃只做一次模糊（整屏降采样后共享），关闭后只保留背景星空，几乎不占用 GPU。"
                                            Style="{StaticResource TextSmall}" />
                             </StackPanel>
                         </Border>
@@ -588,6 +614,33 @@
                                             ValueChanged="MusicVolume_Changed" VerticalAlignment="Center" />
                                     <TextBlock x:Name="MusicVolumeText" Grid.Column="2" Text="65%" Style="{StaticResource TextSmall}"
                                                VerticalAlignment="Center" />
+                                </Grid>
+                                <Border Height="1" Background="{StaticResource BrushBorderSubtle}" Margin="0,4" />
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="记住上次听到哪里" FontSize="13.5" FontWeight="SemiBold" />
+                                        <TextBlock Text="下次打开启动器时回到同一首、同一位置。上次是暂停的，就保持在暂停状态。"
+                                                   Style="{StaticResource TextSmall}" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                    <ToggleSwitch x:Name="MusicRememberSwitch" Grid.Column="1" VerticalAlignment="Center"
+                                                  OnContent="已开启" OffContent="已关闭" Toggled="MusicRemember_Toggled" />
+                                </Grid>
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="启动时自动播放" FontSize="13.5" FontWeight="SemiBold" />
+                                        <TextBlock Text="开启后，如果上次退出时正在播放，下次启动会直接接着放；关闭则总是先暂停。"
+                                                   Style="{StaticResource TextSmall}" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                    <ToggleSwitch x:Name="MusicAutoplaySwitch" Grid.Column="1" VerticalAlignment="Center"
+                                                  OnContent="已开启" OffContent="已关闭" Toggled="MusicAutoplay_Toggled" />
                                 </Grid>
                             </StackPanel>
                         </Border>
@@ -676,6 +729,9 @@
                                             Height="40" Padding="14,0" Click="CheckUpdate_Click" />
                                     <Button x:Name="OpenDataButton" Content="打开数据目录" Style="{StaticResource GhostButton}"
                                             Height="40" Padding="14,0" Click="OpenData_Click" />
+                                    <Button x:Name="ProgressHistoryButton" AutomationProperties.AutomationId="SettingsProgressHistory"
+                                            Content="进度历史" Style="{StaticResource GhostButton}"
+                                            Height="40" Padding="14,0" Click="OpenProgressHistory_Click" />
                                 </StackPanel>
                                 <TextBlock x:Name="DataPathText" Style="{StaticResource TextSmall}" />
                             </StackPanel>
@@ -683,7 +739,7 @@
                         <Border Style="{StaticResource GlassCard}">
                             <StackPanel Spacing="8">
                                 <TextBlock Text="版本策略" Style="{StaticResource TextSectionTitle}" />
-                                <TextBlock Text="升级前会自动把数据备份到 Data_Backup_v1.4.0，账户、皮肤、实例与游戏目录都会保留；卸载时会单独询问是否删除启动器数据。"
+                                <TextBlock Text="升级前会自动把数据备份到 Data_Backup_v1.5.0，账户、皮肤、实例与游戏目录都会保留；卸载时会单独询问是否删除启动器数据。"
                                            Style="{StaticResource TextBody}" />
                             </StackPanel>
                         </Border>

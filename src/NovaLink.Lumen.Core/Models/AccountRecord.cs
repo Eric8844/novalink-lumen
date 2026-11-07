@@ -20,6 +20,13 @@ public sealed class AccountRecord
     public string? NovalinkAvatar { get; set; }
     public string? NovalinkSkinUrl { get; set; }
     public string? MicrosoftAccountId { get; set; }
+    // --- 外置皮肤站（LittleSkin / Yggdrasil）：令牌仍在 AccessToken 里用 SecretProtector 加密 ---
+    /// <summary>登录用的邮箱或用户名，用于重新登录时复用同一条账户记录与 clientToken。</summary>
+    public string? LittleSkinEmail { get; set; }
+    /// <summary>Yggdrasil clientToken，刷新令牌时必须有，明文保存（它本身不是访问凭据）。</summary>
+    public string? LittleSkinClientToken { get; set; }
+    /// <summary>皮肤站主域名，例如 https://littleskin.cn 。</summary>
+    public string? LittleSkinServer { get; set; }
     public string? ForumToken { get; set; }
     public string? Xuid { get; set; }
     public long CreatedAt { get; set; }

@@ -69,9 +69,6 @@
                     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,10,0">
                         <StackPanel x:Name="VersionList" Spacing="8" />
                     </ScrollViewer>
-                    <Rectangle Grid.RowSpan="2" Height="1.5" RadiusX="23" RadiusY="23" Margin="1,0,1,0"
-                               VerticalAlignment="Top" HorizontalAlignment="Stretch"
-                               Fill="{StaticResource BrushGlassHighlight}" IsHitTestVisible="False" />
                 </Grid>
             </Border>
 
@@ -83,9 +80,6 @@
                             <TextBlock Text="还没有安装任何版本" FontSize="15" Foreground="{StaticResource BrushTextSecondary}" />
                             <TextBlock Text="安装 Minecraft 或导入整合包后，实例会出现在这里。" Style="{StaticResource TextSmall}" />
                         </StackPanel>
-                        <Rectangle Height="1.5" RadiusX="23" RadiusY="23" Margin="1,0,1,0"
-                                   VerticalAlignment="Top" HorizontalAlignment="Stretch"
-                                   Fill="{StaticResource BrushGlassHighlight}" IsHitTestVisible="False" />
                     </Grid>
                 </Border>
 
@@ -171,9 +165,6 @@
                                 </StackPanel>
                                 </Button>
                                 </StackPanel>
-                                <Rectangle Height="1.5" RadiusX="23" RadiusY="23" Margin="1,0,1,0"
-                                           VerticalAlignment="Top" HorizontalAlignment="Stretch"
-                                           Fill="{StaticResource BrushGlassHighlight}" IsHitTestVisible="False" />
                             </Grid>
                         </Border>
 
@@ -202,9 +193,6 @@
                                 <TextBlock Grid.Row="3" Grid.Column="1" x:Name="InfoKind" Text="—" FontSize="12" />
                                 </Grid>
                                 </StackPanel>
-                                <Rectangle Height="1.5" RadiusX="23" RadiusY="23" Margin="1,0,1,0"
-                                           VerticalAlignment="Top" HorizontalAlignment="Stretch"
-                                           Fill="{StaticResource BrushGlassHighlight}" IsHitTestVisible="False" />
                             </Grid>
                         </Border>
                     </StackPanel>

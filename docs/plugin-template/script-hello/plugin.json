@@ -6,7 +6,7 @@
   "author": "NovaLink Lumen",
   "description": "免编译脚本插件模板：演示 lumen.log、settings、三个宿主钩子与事件订阅。",
   "apiVersion": 1,
-  "minLauncher": "1.4.1",
+  "minLauncher": "1.5.1",
   "kind": "script",
   "scripts": [
     {

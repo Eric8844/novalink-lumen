@@ -1,6 +1,6 @@
 # AGENTS.md · NovaLink Lumen（工作区项目约定）
 
-本仓库是 **NovaLink Lumen V1.5.0** 的源码（正式版；测试版通道构建方式见 docs/PREVIEW.md）：C# / .NET 10 / WinUI 3 / Win2D 原生 Minecraft 启动器。
+本仓库是 **NovaLink Lumen V1.5.1** 的源码（正式版；测试版通道构建方式见 docs/PREVIEW.md）：C# / .NET 10 / WinUI 3 / Win2D 原生 Minecraft 启动器。
 当前 HEAD `031a2f6`（2026-10-31），remote `https://github.com/Eric8844/novalink-lumen.git`。
 
 ## 先读记忆库，不要重新通读源码
@@ -48,7 +48,7 @@ makensis 本机在 `D:\AI service\desktop\.cache\nsis\nsis-3.0.4.1\Bin`，需手
   CurrentVersion 写死 1.4.0 + GitHub tag 只有 v1.4.0 + 资产名过滤（`UpdateService.cs:52-55` 只认含 `WinUI` 或 `-Setup-x.y.z` 的名字）不匹配 `NovaLinkLumen-Setup.exe`。
   v1.4.1 的处置是**双资产发布**：同时上传 `NovaLinkLumen-Setup.exe` 与 `NovaLinkLumen-WinUI-Setup-1.4.1.exe`，让存量 v1.4.0 客户端至少能收到一次更新。
   v1.5.0 起改**双通道 + 单资产**：产物名统一 `NovaLinkLumen-WinUI-Setup-<版本>.exe`，测试版发 `Eric8844/novalink-lumen-preview`（只放安装包、更新日志、说明），正式版发 `Eric8844/novalink-lumen-releases`。
-- **通道常量必须两个工程都有**：`LauncherChannelInfo` 在 `NovaLink.Lumen.Services` 里用 `#if NOVALINK_PREVIEW` 判断通道，只给 App 工程加 `NovaLinkChannel` 会让更新器永远按正式版仓库检查（1.5.0 发布前踩过）。预览版序号比较取**入口程序集**的 `InformationalVersion`（`1.5.0-preview.N` 只写在 App csproj）。
+- **通道常量必须两个工程都有**：`LauncherChannelInfo` 在 `NovaLink.Lumen.Services` 里用 `#if NOVALINK_PREVIEW` 判断通道，只给 App 工程加 `NovaLinkChannel` 会让更新器永远按正式版仓库检查（1.5.0 发布前踩过）。预览版序号比较取**入口程序集**的 `InformationalVersion`（`1.5.1-preview.N` 只写在 App csproj）。
 - `LaunchService.cs:265` 正则丢反斜杠 → `InferJavaMajor` 恒返回 8。
 - `Settings.JavaArgs`、`Width/Height/Fullscreen` 未接入启动参数。
 

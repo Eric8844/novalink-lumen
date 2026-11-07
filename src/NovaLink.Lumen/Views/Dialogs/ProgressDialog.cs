@@ -142,8 +142,22 @@ public static class ProgressDialog
                 Foreground = new SolidColorBrush(Faint), Margin = new Thickness(8, 16, 8, 8)
             });
         }
+        // 历史日志：任务结束后记录会被删掉，但 .log 与索引都留在这里，点一下用系统默认程序打开。
+        // 没有进行中的任务时也要显示，否则「设置 → 关于 → 进度历史」打开来是空的。
+        var history = ProgressCenter.HistorySnapshot();
+        if (history.Count > 0)
+        {
+            _list.Children.Add(new TextBlock
+            {
+                Text = "历史日志", FontSize = 9, CharacterSpacing = 140,
+                Foreground = new SolidColorBrush(Faint), Margin = new Thickness(8, 14, 8, 2)
+            });
+            foreach (var entry in history.Take(10)) _list.Children.Add(BuildHistoryRow(entry));
+        }
 
         _detail.Children.Clear();
+        var aggregate = ProgressCenter.Aggregate();
+        if (aggregate.Count > 0) AddTotalBlock(aggregate);
         var selected = ProgressCenter.Selected;
         if (_stopButton is not null)
         {
@@ -375,6 +389,104 @@ public static class ProgressDialog
         };
         _detail.Children.Add(_logScroll);
         _logScroll.ChangeView(null, _logScroll.ScrollableHeight, null);
+    }
+
+    private static void AddTotalBlock(ProgressAggregate aggregate)
+    {
+        var card = new Border
+        {
+            Background = new SolidColorBrush(Color.FromArgb(0x24, 0x7C, 0xEB, 0xD6)),
+            BorderBrush = new SolidColorBrush(Color.FromArgb(0x44, 0x7C, 0xEB, 0xD6)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(14),
+            Padding = new Thickness(14, 11, 14, 11)
+        };
+        var stack = new StackPanel { Spacing = 9 };
+
+        var head = new Grid();
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        head.Children.Add(new TextBlock
+        {
+            Text = "总进度 · " + aggregate.Count + " 个任务", FontSize = 11.5,
+            FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Mint),
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        var summary = aggregate.Total > 0
+            ? ProgressTask.FormatBytes(aggregate.Bytes) + " / " + ProgressTask.FormatBytes(aggregate.Total)
+                + (aggregate.Speed > 0 ? " · " + ProgressTask.FormatBytes((long)aggregate.Speed) + "/s" : "")
+            : aggregate.Count + " 个任务进行中";
+        var meta = new TextBlock
+        {
+            Text = summary, FontSize = 9.5, Foreground = new SolidColorBrush(Faint),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        Grid.SetColumn(meta, 1);
+        head.Children.Add(meta);
+        stack.Children.Add(head);
+
+        stack.Children.Add(new ProgressBar
+        {
+            Height = 6, IsIndeterminate = aggregate.Indeterminate,
+            Value = aggregate.Indeterminate ? 0 : aggregate.Percent,
+            Foreground = new SolidColorBrush(Mint),
+            Background = new SolidColorBrush(Color.FromArgb(0x22, 0x00, 0x00, 0x00)),
+            CornerRadius = new CornerRadius(4)
+        });
+
+        stack.Children.Add(new TextBlock
+        {
+            Text = aggregate.Indeterminate
+                ? "正在统计所有任务的下载量…"
+                : Math.Round(aggregate.Percent) + "% · 所有任务合计" +
+                  (aggregate.Total > 0 ? "" : "（启动阶段按阶段推进）"),
+            FontSize = 9.5, Foreground = new SolidColorBrush(Text)
+        });
+        card.Child = stack;
+        _detail!.Children.Add(card);
+    }
+
+    private static Button BuildHistoryRow(ProgressHistoryEntry entry)
+    {
+        var stack = new StackPanel { Spacing = 2 };
+        stack.Children.Add(new TextBlock
+        {
+            Text = entry.LineText, FontSize = 10.5,
+            Foreground = new SolidColorBrush(Text), TextTrimming = TextTrimming.CharacterEllipsis
+        });
+        stack.Children.Add(new TextBlock
+        {
+            Text = string.IsNullOrWhiteSpace(entry.Message) ? "点击打开历史日志" : entry.Message,
+            FontSize = 9, Foreground = new SolidColorBrush(Faint), TextTrimming = TextTrimming.CharacterEllipsis
+        });
+        var row = new Button
+        {
+            Content = stack,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            Padding = new Thickness(8, 6, 8, 6),
+            CornerRadius = new CornerRadius(11),
+            Background = new SolidColorBrush(Color.FromArgb(0x00, 0x00, 0x00, 0x00)),
+            BorderBrush = new SolidColorBrush(Color.FromArgb(0x00, 0xFF, 0xFF, 0xFF)),
+            BorderThickness = new Thickness(1)
+        };
+        row.Click += (_, _) => OpenHistoryLog(entry.LogFile);
+        return row;
+    }
+
+    private static void OpenHistoryLog(string file)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(file)) return;
+            var full = System.IO.Path.GetFullPath(file);
+            if (!System.IO.File.Exists(full)) return;
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(full) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(ex);
+        }
     }
 
     private static void AddMeta(Grid grid, int column, string label, string value, bool mono = false)

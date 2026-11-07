@@ -15,7 +15,6 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Media.Imaging;
-using Rectangle = Microsoft.UI.Xaml.Shapes.Rectangle;
 using NovaLink.Lumen.Controls;
 using NovaLink.Lumen.Core.Models;
 using NovaLink.Lumen.Services;
@@ -33,7 +32,6 @@ public sealed partial class LibraryPage : Page
     private InstanceSummary? _current;
     private string _kind = "mod";
     private LibrarySnapshot? _snapshot;
-    private LibraryOverview? _overview;
     private bool _bulkGuard;
     private LoadingState? _loading;
     private int _renderVersion;
@@ -87,7 +85,6 @@ public sealed partial class LibraryPage : Page
             InstanceCombo.SelectedIndex = index >= 0 ? index : 0;
             SelectTab("mod");
             await ReloadAsync();
-            _ = LoadOverviewAsync();
         }
         catch (Exception ex)
         {
@@ -114,20 +111,29 @@ public sealed partial class LibraryPage : Page
         _ => "模组"
     };
 
-    private async Task LoadOverviewAsync()
+    /// <summary>
+    /// 统计行只算**当前实例**：切版本、点刷新、外部增删文件、装完内容都会在同一个渲染周期里重算。
+    /// 之前这里统计的是「全部实例合计」（12 个实例 · 545 模组），而且只在进页面时算一次，
+    /// 所以切换实例数字纹丝不动，看起来像没跟着刷新——用户反馈的就是这个。
+    /// 数据直接取本次扫描出来的 snapshot，不再额外扫盘。
+    /// </summary>
+    private void UpdateOverview()
     {
-        try
+        if (_snapshot is null)
         {
-            var instances = _instances.ToList();
-            OverviewText.Text = "统计中…";
-            _overview = await Task.Run(() => LumenRuntime.Library.Overview(instances));
-            OverviewText.Text = _overview.Instances + " 个实例 · " + _overview.Mods + " 模组 · " + _overview.Worlds + " 世界 · "
-                + (_overview.ResourcePacks + _overview.ShaderPacks) + " 资源 · 占用 " + FormatSize(_overview.TotalBytes);
+            OverviewText.Text = string.Empty;
+            return;
         }
-        catch (Exception ex)
-        {
-            AppLog.Warn("library", "统计库失败：" + ex.Message);
-        }
+        var mods = _snapshot.Mods.Count;
+        var worlds = _snapshot.Worlds.Count;
+        var packs = _snapshot.ResourcePacks.Count + _snapshot.ShaderPacks.Count;
+        long bytes = 0;
+        foreach (var item in _snapshot.Mods) bytes += item.Size;
+        foreach (var item in _snapshot.Worlds) bytes += item.Size;
+        foreach (var item in _snapshot.ResourcePacks) bytes += item.Size;
+        foreach (var item in _snapshot.ShaderPacks) bytes += item.Size;
+        OverviewText.Text = mods + " 模组 · " + worlds + " 世界 · " + packs + " 资源 · 占用 " + FormatSize(bytes)
+            + " · " + _instances.Count + " 个实例";
     }
 
     private async void Instance_Changed(object sender, SelectionChangedEventArgs e)
@@ -153,20 +159,14 @@ public sealed partial class LibraryPage : Page
     private void SelectTab(string kind)
     {
         _kind = kind;
-        foreach (var (button, key) in new[] { (TabMods, "mod"), (TabWorlds, "world"), (TabResources, "resourcepack"), (TabShaders, "shader") })
-        {
-            var active = key == kind;
-            // 选中态用主题色 + Motion.HoverInMs 过渡：浅色下也能一眼看出当前页签。
-            FadeBrush(button, true, active
-                ? ThemeColor("BrushSelected", Alpha(ThemeManager.Accent, 0x1A))
-                : Color.FromArgb(0, 0, 0, 0), Motion.HoverInMs);
-            FadeBrush(button, false, active
-                ? ThemeColor("BrushNavSelectedBorder", Alpha(ThemeManager.Accent, 0x46))
-                : ThemeColor("BrushStroke", Alpha(ThemeManager.Text, 0x14)), Motion.HoverInMs);
-            button.Foreground = active
-                ? (Brush)Application.Current.Resources["BrushMint"]
-                : (Brush)Application.Current.Resources["BrushTextSecondary"];
-        }
+        var tabs = new[] { (TabMods, "mod"), (TabWorlds, "world"), (TabResources, "resourcepack"), (TabShaders, "shader") };
+        var index = Array.FindIndex(tabs, t => t.Item2 == kind);
+        if (index < 0) index = 0;
+        // 选中态交给 SegmentedSwitch 的胶囊（与发现/论坛同一套）。
+        // 这里不能再动按钮的圆角：以前每次点击都把 CornerRadius 设回 999，WinUI 不会把圆角
+        // 夹到短边一半，胶囊会被画成溢出按钮边界的巨大椭圆，压到相邻页签上——用户看到的
+        // 「穿过去 / 圆很难看」就是它。圆角只由 SegmentedSwitch.PrepareButton 按高度算。
+        SegmentedSwitch.Select(TabBarHost, index);
         ListTitle.Text = kind switch
         {
             "world" => "世界",
@@ -228,6 +228,7 @@ public sealed partial class LibraryPage : Page
         PathText.Text = folder;
         WatchFolder(folder);
         CountText.Text = items.Count + " 项";
+        UpdateOverview();
         ItemList.Children.Clear();
         EmptyPanel.Visibility = items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         ItemList.Visibility = items.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
@@ -259,6 +260,8 @@ public sealed partial class LibraryPage : Page
 
         if (version != _renderVersion) return;
         UpdateSelection();
+        // 行卡刚上屏：立刻重扫透镜，否则新行卡会先露一层透明底，等下一次定时重扫才补上液态玻璃。
+        GlassPanes.Rescan(this);
     }
 
     /// <summary>库目录被外部改动（资源管理器删除/游戏写入）时自动重扫，600ms 防抖。</summary>
@@ -363,11 +366,9 @@ public sealed partial class LibraryPage : Page
     {
         var card = new Border
         {
-            // 玻璃行卡片：填充取玻璃淡层，描边走主题实色，浅色主题下边界才立得住。
-            Background = (Brush)Application.Current.Resources["BrushGlassFaint"],
-            BorderBrush = ThemeManager.BrushCardBorder,
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(14),
+            // 玻璃行卡片：观感统一交给 Theme.xaml 的 GlassRow（淡玻璃填充 + 主题描边 + 14 圆角）。
+            // GlassPanes 只按 Style 识别玻璃，所以这里必须走样式，不能逐个设属性。
+            Style = (Style)Application.Current.Resources["GlassRow"],
             Padding = new Thickness(12, 10, 14, 10)
         };
         var grid = new Grid { ColumnSpacing = 11 };
@@ -470,21 +471,7 @@ public sealed partial class LibraryPage : Page
         Grid.SetColumn(actions, 3);
         grid.Children.Add(actions);
 
-        // 顶边 1.5px 液态高光，和主容器同一配方；不参与命中测试。
-        var shell = new Grid();
-        shell.Children.Add(grid);
-        shell.Children.Add(new Rectangle
-        {
-            Height = 1.5,
-            RadiusX = 13,
-            RadiusY = 13,
-            Margin = new Thickness(1, 0, 1, 0),
-            VerticalAlignment = VerticalAlignment.Top,
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            Fill = (Brush)Application.Current.Resources["BrushGlassHighlight"],
-            IsHitTestVisible = false
-        });
-        card.Child = shell;
+        card.Child = grid;
         card.Tag = "no-motion";
         Motion.Hover(card, 1.003f, 1.0f);
         return card;

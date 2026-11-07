@@ -98,6 +98,9 @@ public partial class App : Application
 
     private void OnMainWindowClosed(object sender, WindowEventArgs args)
     {
+        // 先把音乐台听到哪儿记下来，下次启动才能接着放/接着停。
+        try { Views.ShellPage.Current?.PersistMusicState(); }
+        catch (Exception ex) { BootLog.Error("保存播放进度时出错。", ex); }
         try { LumenRuntime.ShutdownPlugins(); }
         catch (Exception ex) { BootLog.Error("关闭插件时出错。", ex); }
     }

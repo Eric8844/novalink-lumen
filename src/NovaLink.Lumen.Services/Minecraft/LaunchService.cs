@@ -101,11 +101,11 @@ public sealed class LaunchService
 
         var natives = Path.Combine(root, "versions", instance.Id, "natives");
         Directory.CreateDirectory(natives);
-        Stage?.Invoke("校验运行库", 30, "正在检查 libraries 与原生库");
-        await EnsureLibrariesAsync(version, root, natives, ct);
-        Stage?.Invoke("校验资源", 44, "正在检查客户端与资源索引");
-        await EnsureClientJarAsync(version, root, ct);
-        await EnsureAssetsAsync(version, root, ct);
+        Stage?.Invoke("校验游戏文件", 30, "正在检查 libraries、客户端与资源文件");
+        var installProgress = new Progress<DownloadProgress>(report =>
+            // 启动前补全文件也走同一条总进度，不再按 30/44/58 这种分段百分比跳。
+            Stage?.Invoke("校验游戏文件", 30 + Math.Clamp(report.Percent, 0, 100) * 0.28, report.Message));
+        await EnsureInstallAsync(instance.Id, installProgress, ct);
 
         var classpath = BuildClasspath(version, root);
         if (classpath.Count == 0) throw new InvalidOperationException("类路径为空，请检查版本文件是否完整");
@@ -316,7 +316,7 @@ public sealed class LaunchService
 
     private static int InferJavaMajor(string kernel)
     {
-        var match = Regex.Match(kernel ?? "", @"^(?<major>d+).(?<minor>d+)");
+        var match = Regex.Match(kernel ?? "", @"^(?<major>\d+)\.(?<minor>\d+)");
         if (!match.Success) return 8;
         var major = int.Parse(match.Groups["major"].Value);
         if (major >= 26) return 25;
@@ -343,6 +343,7 @@ public sealed class LaunchService
         public string? JarId;
         public string ClientJar = "";
         public string? ClientUrl;
+        public long ClientSize;
         public List<Library> Libraries = [];
         public List<JsonElement> Jvm = [];
         public List<JsonElement> Game = [];
@@ -379,7 +380,10 @@ public sealed class LaunchService
             if (!string.IsNullOrWhiteSpace(v.Type)) result.Type = v.Type!;
             if (!string.IsNullOrWhiteSpace(v.Jar)) result.JarId = v.Jar;
             if (v.Downloads is not null && v.Downloads.TryGetValue("client", out var clientDownload) && !string.IsNullOrWhiteSpace(clientDownload.Url))
+            {
                 result.ClientUrl = clientDownload.Url;
+                result.ClientSize = clientDownload.Size;
+            }
             if (v.Arguments?.Jvm is { Count: > 0 }) result.Jvm.AddRange(v.Arguments.Jvm);
             if (v.Arguments?.Game is { Count: > 0 }) result.Game.AddRange(v.Arguments.Game);
             foreach (var lib in v.Libraries)
@@ -457,46 +461,150 @@ public sealed class LaunchService
                 throw new InvalidOperationException("NovaLink 账户已绑定 Microsoft，但本机登录已失效，请在设置中重新绑定");
             }
         }
+        // LittleSkin（Yggdrasil 兼容）：令牌直接当 accessToken 交给游戏，userType 用 mojang，
+        // 这样客户端会按 Yggdrasil 会话校验皮肤与身份；过期时由 AccountService 自动 refresh 一次。
+        if (account.Type == "littleskin")
+        {
+            var littleSkin = await _accounts.EnsureLittleSkinTokenAsync(account, ct);
+            if (!string.IsNullOrWhiteSpace(littleSkin))
+            {
+                token = littleSkin;
+                userType = "mojang";
+            }
+        }
         return new Identity(name ?? "Player", uuid.Replace("-", ""), token, userType, xuid);
     }
 
+    private sealed record DownloadItem(string Url, string Target, long Size);
+
+    /// <summary>
+    /// 一次安装只对外报一条总进度：先把库文件、客户端、资源索引、资源对象全部算进分母，
+    /// 再按累计下载字节推进，不再出现「库 55% → 客户端 78% → 资源 100%」那种分段跳变。
+    /// </summary>
     public async Task EnsureInstallAsync(string id, IProgress<DownloadProgress>? progress, CancellationToken ct = default)
     {
         var root = _settings.Settings.GameRoot;
         var version = await ResolveVersionAsync(id, ct) ?? throw new InvalidOperationException("找不到版本配置：" + id);
-        progress?.Report(new DownloadProgress("resolve", 2, 0, 0, 0, "已读取版本配置"));
         var natives = Path.Combine(root, "versions", id, "natives");
         Directory.CreateDirectory(natives);
-        await EnsureLibrariesAsync(version, root, natives, ct);
-        progress?.Report(new DownloadProgress("libraries", 55, 0, 0, 0, "库文件已就绪"));
-        await EnsureClientJarAsync(version, root, ct);
-        progress?.Report(new DownloadProgress("client", 78, 0, 0, 0, "客户端已就绪"));
-        await EnsureAssetsAsync(version, root, ct);
-        progress?.Report(new DownloadProgress("assets", 100, 0, 0, 0, "资源索引已就绪"));
+
+        var plan = new List<DownloadItem>();
+        var nativeJars = new List<string>();
+        PlanLibraries(version, root, plan, nativeJars);
+        PlanClientJar(version, plan);
+        PlanAssetIndex(version, root, plan);
+        plan = plan.GroupBy(item => item.Target, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .ToList();
+
+        // 资源对象要等索引下完才知道，先用索引里的 totalSize 估一个分母，避免进度条从 100% 倒退。
+        var plannedBytes = plan.Sum(item => Math.Max(0, item.Size));
+        var total = plannedBytes + Math.Max(0, version.AssetIndex?.TotalSize ?? 0);
+        long done = 0;
+        var clock = Stopwatch.StartNew();
+        var lastSent = 0L;
+        var lastAt = 0L;
+        var lastBytes = 0L;
+        double speed = 0;
+
+        void Report(string message, bool force = false)
+        {
+            var elapsed = clock.ElapsedMilliseconds;
+            if (!force && elapsed - lastSent < 120) return;
+            lastSent = elapsed;
+            if (done > lastBytes && elapsed > lastAt)
+            {
+                var sample = (done - lastBytes) * 1000.0 / (elapsed - lastAt);
+                if (sample > 0 && double.IsFinite(sample))
+                    speed = speed > 0 ? speed * 0.5 + sample * 0.5 : sample;
+                lastAt = elapsed;
+                lastBytes = done;
+            }
+            else if (lastAt == 0) lastAt = elapsed;
+            var percent = total > 0 ? Math.Clamp(done * 100.0 / (double)total, 0, 100) : 0;
+            progress?.Report(new DownloadProgress("下载中", percent, done, total, speed, message));
+        }
+
+        using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(30) };
+
+        async Task DownloadAllAsync(List<DownloadItem> items)
+        {
+            foreach (var item in items)
+            {
+                ct.ThrowIfCancellationRequested();
+                if (string.IsNullOrWhiteSpace(item.Url)) continue;
+                var existing = File.Exists(item.Target) ? new FileInfo(item.Target).Length : 0;
+                if (existing > 0)
+                {
+                    done += item.Size > 0 ? item.Size : existing;
+                    Report("已存在 " + Path.GetFileName(item.Target));
+                    continue;
+                }
+                Directory.CreateDirectory(Path.GetDirectoryName(item.Target)!);
+                Emit("[Lumen] 下载 " + Path.GetFileName(item.Target));
+                try
+                {
+                    await DownloadFileAsync(http, item, count =>
+                    {
+                        done += count;
+                        Report("下载 " + Path.GetFileName(item.Target));
+                    }, ct);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    // 单个库或资源失败不该让整个安装停摆，缺文件会在启动日志里体现。
+                    AppLog.Warn("launch", "下载失败 " + Path.GetFileName(item.Target) + "：" + ex.Message);
+                }
+            }
+        }
+
+        Report("正在准备下载文件", true);
+        await DownloadAllAsync(plan);
+
+        var objects = PlanAssetObjects(version, root);
+        if (objects.Count > 0)
+        {
+            total = plannedBytes + objects.Sum(item => Math.Max(0, item.Size));
+            Report("正在下载资源文件（" + objects.Count + " 个）", true);
+            await DownloadAllAsync(objects);
+        }
+
+        ExtractNatives(nativeJars, natives);
+        done = Math.Max(done, plannedBytes);
+        Report("游戏文件已全部就绪", true);
+        progress?.Report(new DownloadProgress("完成", 100, Math.Max(done, total), total, 0, "游戏文件已全部就绪"));
     }
 
-    private async Task EnsureClientJarAsync(ResolvedVersion version, string root, CancellationToken ct)
+    private static async Task DownloadFileAsync(HttpClient http, DownloadItem item, Action<long> onBytes, CancellationToken ct)
+    {
+        using var response = await http.GetAsync(item.Url, HttpCompletionOption.ResponseHeadersRead, ct);
+        response.EnsureSuccessStatusCode();
+        var buffer = new byte[81920];
+        await using var source = await response.Content.ReadAsStreamAsync(ct);
+        await using var target = new FileStream(item.Target, FileMode.Create, FileAccess.Write, FileShare.None,
+            buffer.Length, FileOptions.Asynchronous);
+        int read;
+        while ((read = await source.ReadAsync(buffer.AsMemory(0, buffer.Length), ct)) > 0)
+        {
+            await target.WriteAsync(buffer.AsMemory(0, read), ct);
+            onBytes(read);
+        }
+    }
+
+    private void PlanClientJar(ResolvedVersion version, List<DownloadItem> plan)
     {
         if (File.Exists(version.ClientJar) && new FileInfo(version.ClientJar).Length > 0) return;
-        var dir = Path.GetDirectoryName(version.ClientJar)!;
-        Directory.CreateDirectory(dir);
-        var url = version.ClientUrl;
-        if (string.IsNullOrWhiteSpace(url))
+        if (string.IsNullOrWhiteSpace(version.ClientUrl))
         {
             Emit("[Lumen] 缺少客户端文件，且版本配置未提供下载地址");
             return;
         }
-        Emit("[Lumen] 下载客户端 " + version.Kernel);
-        using var http = new HttpClient();
-        http.Timeout = TimeSpan.FromMinutes(10);
-        var bytes = await http.GetByteArrayAsync(url, ct);
-        await File.WriteAllBytesAsync(version.ClientJar, bytes, ct);
+        Directory.CreateDirectory(Path.GetDirectoryName(version.ClientJar)!);
+        plan.Add(new DownloadItem(version.ClientUrl!, version.ClientJar, version.ClientSize));
     }
 
-    private async Task EnsureLibrariesAsync(ResolvedVersion version, string root, string natives, CancellationToken ct)
+    private void PlanLibraries(ResolvedVersion version, string root, List<DownloadItem> plan, List<string> nativeJars)
     {
-        var nativeJars = new List<string>();
-        using var http = new HttpClient();
         foreach (var library in version.Libraries)
         {
             if (!Allowed(library.Rules)) continue;
@@ -505,13 +613,8 @@ public sealed class LaunchService
             if (string.IsNullOrWhiteSpace(rel)) rel = MavenPath(library.Name);
             if (string.IsNullOrWhiteSpace(rel)) continue;
             var target = Path.Combine(root, "libraries", rel.Replace('/', Path.DirectorySeparatorChar));
-            if (!File.Exists(target) && !string.IsNullOrWhiteSpace(artifact?.Url))
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-                Emit("[Lumen] 补全库 " + Path.GetFileName(target));
-                var bytes = await http.GetByteArrayAsync(artifact.Url, ct);
-                await File.WriteAllBytesAsync(target, bytes, ct);
-            }
+            if (!string.IsNullOrWhiteSpace(artifact?.Url))
+                plan.Add(new DownloadItem(artifact!.Url!, target, artifact.Size));
             if (IsNative(library, rel)) nativeJars.Add(target);
         }
 
@@ -525,16 +628,58 @@ public sealed class LaunchService
                 var rel = info.Path ?? MavenPath(library.Name, classifier);
                 if (string.IsNullOrWhiteSpace(rel)) continue;
                 var target = Path.Combine(root, "libraries", rel.Replace('/', Path.DirectorySeparatorChar));
-                if (!File.Exists(target) && !string.IsNullOrWhiteSpace(info.Url))
-                {
-                    Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-                    var bytes = await http.GetByteArrayAsync(info.Url, ct);
-                    await File.WriteAllBytesAsync(target, bytes, ct);
-                }
+                if (!string.IsNullOrWhiteSpace(info.Url))
+                    plan.Add(new DownloadItem(info.Url!, target, info.Size));
                 nativeJars.Add(target);
             }
         }
+    }
 
+    private static void PlanAssetIndex(ResolvedVersion version, string root, List<DownloadItem> plan)
+    {
+        var index = version.AssetIndex;
+        if (index is null || string.IsNullOrWhiteSpace(index.Id)) return;
+        var file = Path.Combine(root, "assets", "indexes", index.Id + ".json");
+        if (File.Exists(file)) return;
+        if (string.IsNullOrWhiteSpace(index.Url)) return;
+        plan.Add(new DownloadItem(index.Url!, file, index.Size));
+    }
+
+    private static List<DownloadItem> PlanAssetObjects(ResolvedVersion version, string root)
+    {
+        var result = new List<DownloadItem>();
+        var index = version.AssetIndex;
+        if (index is null || string.IsNullOrWhiteSpace(index.Id)) return result;
+        var indexFile = Path.Combine(root, "assets", "indexes", index.Id + ".json");
+        if (!File.Exists(indexFile)) return result;
+        try
+        {
+            using var document = JsonDocument.Parse(File.ReadAllText(indexFile));
+            if (!document.RootElement.TryGetProperty("objects", out var objects) ||
+                objects.ValueKind != JsonValueKind.Object) return result;
+            foreach (var entry in objects.EnumerateObject())
+            {
+                if (!entry.Value.TryGetProperty("hash", out var hashElement)) continue;
+                var hash = hashElement.GetString();
+                if (string.IsNullOrWhiteSpace(hash) || hash.Length < 2) continue;
+                var size = entry.Value.TryGetProperty("size", out var sizeElement) && sizeElement.TryGetInt64(out var value)
+                    ? value
+                    : 0;
+                var target = Path.Combine(root, "assets", "objects", hash[..2], hash);
+                if (File.Exists(target) && new FileInfo(target).Length > 0) continue;
+                result.Add(new DownloadItem("https://resources.download.minecraft.net/" + hash[..2] + "/" + hash,
+                    target, size));
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("launch", "读取资源索引失败：" + ex.Message);
+        }
+        return result;
+    }
+
+    private void ExtractNatives(List<string> nativeJars, string natives)
+    {
         foreach (var jar in nativeJars.Distinct())
         {
             if (!File.Exists(jar)) continue;
@@ -575,20 +720,6 @@ public sealed class LaunchService
             }
         }
         catch (Exception ex) { AppLog.Warn("launch", "整理原生库失败：" + ex.Message); }
-    }
-
-    private async Task EnsureAssetsAsync(ResolvedVersion version, string root, CancellationToken ct)
-    {
-        var index = version.AssetIndex;
-        if (index is null || string.IsNullOrWhiteSpace(index.Id)) return;
-        var indexFile = Path.Combine(root, "assets", "indexes", index.Id + ".json");
-        if (!File.Exists(indexFile) && !string.IsNullOrWhiteSpace(index.Url))
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(indexFile)!);
-            using var http = new HttpClient();
-            var bytes = await http.GetByteArrayAsync(index.Url, ct);
-            await File.WriteAllBytesAsync(indexFile, bytes, ct);
-        }
     }
 
     private static bool IsNative(Library library, string rel)

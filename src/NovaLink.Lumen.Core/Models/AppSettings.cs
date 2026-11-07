@@ -34,6 +34,14 @@ public sealed class AppSettings
     public string MusicMode { get; set; } = "list";
     public double MusicVolume { get; set; } = 0.65;
     public bool MusicAutoplay { get; set; } = true;
+    /// <summary>记住上次播放的曲目与进度；下次启动时直接接着放/接着停。</summary>
+    public bool MusicRememberPosition { get; set; } = true;
+    /// <summary>上次退出时选中的曲目序号（-1 表示没有）。</summary>
+    public int MusicLastIndex { get; set; } = -1;
+    /// <summary>上次退出时的播放位置（秒）。</summary>
+    public double MusicLastPositionSeconds { get; set; }
+    /// <summary>上次退出时是否正在播放；为 false 时下次启动只恢复位置、不自动播放。</summary>
+    public bool MusicLastWasPlaying { get; set; }
     public string GlassQuality { get; set; } = "auto";
     public bool GlassMotion { get; set; } = true;
     public bool AutoUpdate { get; set; } = true;

@@ -357,7 +357,8 @@ public sealed class PluginRegistry
             new PluginLogger(descriptor.Id),
             settings,
             _options.Host ?? NullPluginHost.Instance,
-            _options.Ui ?? NullPluginUi.Instance);
+            _options.Ui ?? NullPluginUi.Instance,
+            _options.Theme);
         _contexts[descriptor.Id] = context;
 
         instance.Initialize(context);
@@ -400,7 +401,8 @@ public sealed class PluginRegistry
             new PluginLogger(descriptor.Id),
             settings,
             _options.Host ?? NullPluginHost.Instance,
-            _options.Ui ?? NullPluginUi.Instance);
+            _options.Ui ?? NullPluginUi.Instance,
+            _options.Theme);
         _contexts[descriptor.Id] = context;
 
         handler.Initialize(context);

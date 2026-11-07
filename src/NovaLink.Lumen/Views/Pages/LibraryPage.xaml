@@ -48,22 +48,42 @@
 
         <Grid Grid.Row="1" Margin="0,0,0,12">
             <StackPanel Orientation="Horizontal" Spacing="10">
-                <Border Background="{StaticResource BrushGlassFaint}" BorderBrush="{StaticResource BrushGlassRim}" BorderThickness="1" Padding="14,8,14,8" CornerRadius="14">
-                    <StackPanel Orientation="Horizontal" Spacing="9">
-                        <FontIcon Glyph="&#xE7C3;" FontSize="13" Foreground="{StaticResource BrushTextTertiary}" />
+                <!-- 与发现页的内容类型栏同一种「轨道 + 胶囊」：轨道只画一层底，不再套第二层输入框边框。
+                     以前这里是「玻璃外框里再嵌一个带边框的 ComboBox」，两层圆角边框同时可见，
+                     看起来就像一层从另一层里穿过去。 -->
+                <Border Background="{StaticResource BrushFillSubtle}" BorderBrush="{StaticResource BrushBorderSubtle}"
+                        BorderThickness="1" CornerRadius="22" Padding="6,0,6,0" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                        <FontIcon Glyph="&#xE7C3;" FontSize="13" Margin="8,0,0,0" Foreground="{StaticResource BrushTextTertiary}" />
                         <TextBlock Text="当前实例" Style="{StaticResource TextSmall}" VerticalAlignment="Center" />
                         <ComboBox x:Name="InstanceCombo" Width="280" Height="34" AutomationProperties.AutomationId="LibraryInstanceCombo"
-                                  Foreground="{StaticResource BrushText}" Background="{StaticResource BrushField}"
-                                  BorderBrush="{StaticResource BrushFieldBorder}"
-                                  SelectionChanged="Instance_Changed" />
+                                  Foreground="{StaticResource BrushText}" Background="Transparent" BorderThickness="0"
+                                  SelectionChanged="Instance_Changed">
+                            <ComboBox.Resources>
+                                <SolidColorBrush x:Key="ComboBoxBackground" Color="Transparent" />
+                                <SolidColorBrush x:Key="ComboBoxBackgroundUnfocused" Color="Transparent" />
+                                <SolidColorBrush x:Key="ComboBoxBackgroundPointerOver" Color="Transparent" />
+                                <SolidColorBrush x:Key="ComboBoxBackgroundPressed" Color="Transparent" />
+                                <SolidColorBrush x:Key="ComboBoxBorderBrush" Color="Transparent" />
+                                <SolidColorBrush x:Key="ComboBoxBorderBrushUnfocused" Color="Transparent" />
+                                <SolidColorBrush x:Key="ComboBoxBorderBrushPointerOver" Color="Transparent" />
+                                <SolidColorBrush x:Key="ComboBoxBorderBrushPressed" Color="Transparent" />
+                            </ComboBox.Resources>
+                        </ComboBox>
                     </StackPanel>
                 </Border>
-                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                    <Button x:Name="TabMods" Tag="mod" AutomationProperties.AutomationId="LibraryTabMods" Style="{StaticResource GhostButton}" Click="Tab_Click" Content="模组" />
-                    <Button x:Name="TabWorlds" Tag="world" AutomationProperties.AutomationId="LibraryTabWorlds" Style="{StaticResource GhostButton}" Click="Tab_Click" Content="世界" />
-                    <Button x:Name="TabResources" Tag="resourcepack" AutomationProperties.AutomationId="LibraryTabResources" Style="{StaticResource GhostButton}" Click="Tab_Click" Content="资源包" />
-                    <Button x:Name="TabShaders" Tag="shader" AutomationProperties.AutomationId="LibraryTabShaders" Style="{StaticResource GhostButton}" Click="Tab_Click" Content="光影" />
-                </StackPanel>
+                <!-- 外层 Grid 只是给药丸指示器一个可以绝对定位的宿主：SegmentedSwitch 会把 indicator 加在 Grid 里，
+                     而不是塞进 StackPanel（那样会占掉布局位、把按钮挤歪）。 -->
+                <Grid x:Name="TabBarHost" VerticalAlignment="Center">
+                    <Border Background="{StaticResource BrushFillSubtle}" BorderBrush="{StaticResource BrushBorderSubtle}"
+                            BorderThickness="1" CornerRadius="22" IsHitTestVisible="False" />
+                    <StackPanel x:Name="TabBar" Orientation="Horizontal" Spacing="4" Padding="4" VerticalAlignment="Center">
+                        <Button x:Name="TabMods" Tag="mod" AutomationProperties.AutomationId="LibraryTabMods" Style="{StaticResource GhostButton}" Height="34" Padding="14,0" Click="Tab_Click" Content="模组" />
+                        <Button x:Name="TabWorlds" Tag="world" AutomationProperties.AutomationId="LibraryTabWorlds" Style="{StaticResource GhostButton}" Height="34" Padding="14,0" Click="Tab_Click" Content="世界" />
+                        <Button x:Name="TabResources" Tag="resourcepack" AutomationProperties.AutomationId="LibraryTabResources" Style="{StaticResource GhostButton}" Height="34" Padding="14,0" Click="Tab_Click" Content="资源包" />
+                        <Button x:Name="TabShaders" Tag="shader" AutomationProperties.AutomationId="LibraryTabShaders" Style="{StaticResource GhostButton}" Height="34" Padding="14,0" Click="Tab_Click" Content="光影" />
+                    </StackPanel>
+                </Grid>
             </StackPanel>
             <TextBlock x:Name="CountText" Style="{StaticResource TextSmall}" HorizontalAlignment="Right" VerticalAlignment="Center" />
         </Grid>
@@ -97,9 +117,6 @@
                 <ScrollViewer Grid.Row="2" Style="{StaticResource PageScroll}">
                     <StackPanel x:Name="ItemList" Spacing="8" />
                 </ScrollViewer>
-                <Rectangle Grid.RowSpan="3" Height="1.5" RadiusX="23" RadiusY="23" Margin="1,0,1,0"
-                           VerticalAlignment="Top" HorizontalAlignment="Stretch"
-                           Fill="{StaticResource BrushGlassHighlight}" IsHitTestVisible="False" />
                 <StackPanel x:Name="EmptyPanel" Grid.Row="2" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10" Visibility="Collapsed">
                     <FontIcon Glyph="&#xE7B8;" FontSize="28" Foreground="{StaticResource BrushTextTertiary}" />
                     <TextBlock x:Name="EmptyText" Text="这里还是空的" FontSize="15" Foreground="{StaticResource BrushTextSecondary}" />

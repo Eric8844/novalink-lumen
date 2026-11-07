@@ -60,7 +60,7 @@
                     <TextBlock x:Name="SplashStatus" Text="正在准备液态玻璃…" FontSize="11.5"
                                Foreground="{StaticResource BrushTextTertiary}" HorizontalAlignment="Center" />
                 </StackPanel>
-                <TextBlock Text="WINDOWS 10 / 11 · X64 · 1.5.0" FontSize="9.5" CharacterSpacing="160"
+                <TextBlock Text="WINDOWS 10 / 11 · X64 · 1.5.1" FontSize="9.5" CharacterSpacing="160"
                            Foreground="{StaticResource BrushTextTertiary}" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,26" />
             </Grid>
         </Grid>

@@ -51,29 +51,43 @@
         <GradientStop Color="#1FA996FF" Offset="1" />
     </LinearGradientBrush>
 
+    <!-- 玻璃材质（Lens 参考）：薄白雾 + 一次模糊，不再叠厚重深色。
+         背景层已经用 Win2D 画了模糊后的场景，XAML 这边只需要很轻的一层奶白，
+         让文字有对比，同时别把模糊层整个盖住（盖住等于白算一遍模糊）。 -->
     <LinearGradientBrush x:Key="BrushGlass" StartPoint="0,0" EndPoint="1,1">
-        <GradientStop Color="#B3121B2A" Offset="0" />
-        <GradientStop Color="#7A0B1220" Offset="0.55" />
-        <GradientStop Color="#66080E18" Offset="1" />
+        <GradientStop Color="#4D0A1018" Offset="0" />
+        <GradientStop Color="#3D080D14" Offset="0.55" />
+        <GradientStop Color="#2E060A10" Offset="1" />
     </LinearGradientBrush>
 
     <LinearGradientBrush x:Key="BrushGlassCard" StartPoint="0,0" EndPoint="1,1">
-        <GradientStop Color="#26162134" Offset="0" />
-        <GradientStop Color="#1C101A2A" Offset="0.58" />
-        <GradientStop Color="#140A101C" Offset="1" />
+        <GradientStop Color="#450A1018" Offset="0" />
+        <GradientStop Color="#36080D14" Offset="0.58" />
+        <GradientStop Color="#29060A10" Offset="1" />
     </LinearGradientBrush>
 
     <LinearGradientBrush x:Key="BrushGlassFaint" StartPoint="0,0" EndPoint="1,1">
-        <GradientStop Color="#59182638" Offset="0" />
-        <GradientStop Color="#330C1320" Offset="1" />
+        <GradientStop Color="#2E080D14" Offset="0" />
+        <GradientStop Color="#16060A10" Offset="1" />
     </LinearGradientBrush>
 
     <LinearGradientBrush x:Key="BrushGlassRim" StartPoint="0,0" EndPoint="0.7,1">
-        <GradientStop Color="#52FFFFFF" Offset="0" />
-        <GradientStop Color="#22FFFFFF" Offset="0.32" />
-        <GradientStop Color="#0FFFFFFF" Offset="0.72" />
-        <GradientStop Color="#08FFFFFF" Offset="1" />
+        <GradientStop Color="#73FFFFFF" Offset="0" />
+        <GradientStop Color="#33FFFFFF" Offset="0.32" />
+        <GradientStop Color="#17FFFFFF" Offset="0.72" />
+        <GradientStop Color="#0AFFFFFF" Offset="1" />
     </LinearGradientBrush>
+
+    <!-- 内缘折射环（参照 Lens 的 .lg-optic-rim）：顶部白亮、向下快速衰减到底部近乎为 0。
+         Win2D 侧由 AuroraBackdrop.DrawRim 用调色板画同样的渐变，这里同步令牌供 XAML 复用。 -->
+    <LinearGradientBrush x:Key="BrushGlassEdge" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#59FFFFFF" Offset="0" />
+        <GradientStop Color="#21FFFFFF" Offset="0.45" />
+        <GradientStop Color="#0AFFFFFF" Offset="1" />
+    </LinearGradientBrush>
+
+    <!-- 外缘暗边：玻璃厚度。深色主题压黑，浅色主题压冷灰蓝。 -->
+    <SolidColorBrush x:Key="BrushGlassEdgeOuter" Color="#33000000" />
 
     <!-- Liquid-glass top gloss: sits above a glass surface as a 1px-ish sheen plus a soft falloff.
          ThemeManager swaps the two stops so it reads as a light catch in dark mode and a
@@ -84,8 +98,16 @@
         <GradientStop Color="#00FFFFFF" Offset="0.62" />
     </LinearGradientBrush>
 
+    <!-- 弹窗顶部柔光：一条从顶端往下淡出的竖向渐变，而不是一条 1px 硬横线。
+         页面卡片不再使用任何顶部高光（那条横线看起来像分隔线），只有浮层用它。 -->
+    <LinearGradientBrush x:Key="BrushGlassTopBand" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#3AFFFFFF" Offset="0" />
+        <GradientStop Color="#14FFFFFF" Offset="0.45" />
+        <GradientStop Color="#00FFFFFF" Offset="1" />
+    </LinearGradientBrush>
+
     <!-- Floating surfaces (menus, popovers, dock) blur what is behind them. -->
-    <AcrylicBrush x:Key="BrushGlassLiquid" TintColor="#0A111D" TintOpacity="0.58" FallbackColor="#E60A111D" />
+    <AcrylicBrush x:Key="BrushGlassLiquid" TintColor="#0A111D" TintOpacity="0.55" FallbackColor="#E60A111D" />
 
     <Style x:Key="TextBase" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="Segoe UI Variable Display" />
@@ -136,6 +158,15 @@
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="24" />
         <Setter Property="Padding" Value="24" />
+    </Style>
+
+    <!-- 列表行卡（库页、实例列表这类窄长条）：填充比 GlassCard 更淡，描边走主题实色，
+         浅色主题下边界才立得住。玻璃由 GlassPanes 收集 Style == GlassRow 后在背景层统一画。 -->
+    <Style x:Key="GlassRow" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource BrushGlassFaint}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BrushBorderSubtle}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="14" />
     </Style>
 
     <Style x:Key="GlassPanel" TargetType="Border">

@@ -94,7 +94,7 @@ public sealed class UpdateService
                 Size = a.TryGetProperty("size", out var s) && s.TryGetInt64(out var v) ? v : 0
             }).ToList();
             // 资产名过滤：只认带 WinUI 或 -Setup-x.y.z 的 exe，防止同仓库里的 Electron 安装包
-            // 被当成本机更新。安装包命名约定 NovaLinkLumen-WinUI-Setup-1.5.0.exe。
+            // 被当成本机更新。安装包命名约定 NovaLinkLumen-WinUI-Setup-1.5.1.exe。
             var asset = entries.FirstOrDefault(a =>
                 a.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) &&
                 (a.Name.Contains("WinUI", StringComparison.OrdinalIgnoreCase) ||

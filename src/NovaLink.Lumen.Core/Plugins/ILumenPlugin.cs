@@ -35,6 +35,9 @@ public interface IPluginContext
     /// <summary>UI 注入门面。P0 未接线时 IsAvailable == false，AddNavigation 为空操作。</summary>
     IPluginUi Ui { get; }
 
+    /// <summary>主题门面（v1.5.1）：读深/浅色、取主题色、订阅主题切换。永远不为 null。</summary>
+    IPluginTheme Theme => NullPluginTheme.Instance;
+
     /// <summary>订阅插件事件；返回的对象 Dispose 后取消订阅。宿主会吞掉处理器的异常并记日志。</summary>
     IDisposable Subscribe(PluginEvent evt, Action<PluginEventArgs> handler);
 }

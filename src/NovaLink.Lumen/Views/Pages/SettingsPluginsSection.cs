@@ -198,7 +198,7 @@ public sealed partial class SettingsPage
 
     private Border BuildPluginRow(PluginDescriptor plugin, bool safeMode)
     {
-        // 液态玻璃卡片：主题化的玻璃填充 + 玻璃描边 + 顶部 1px 高光。
+        // 液态玻璃卡片：主题化的玻璃填充 + 玻璃描边（顶部高光条已按用户要求去掉）。
         // 原来这里是写死的白色低透明度（深色专用），浅色模式下整张卡片几乎看不见。
         var card = new Border
         {
@@ -209,7 +209,7 @@ public sealed partial class SettingsPage
             Padding = new Thickness(0)
         };
 
-        // 卡片内容比卡片内缩 1px 的高光条：内容用 Margin 让位，高光才能贴在最上沿。
+        // 卡片内容四周留白，避免行内元素贴边。
         var grid = new Grid { ColumnSpacing = 12, Margin = new Thickness(12, 10, 10, 10) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -299,22 +299,7 @@ public sealed partial class SettingsPage
         Grid.SetColumn(actions, 1);
         grid.Children.Add(actions);
 
-        // 顶部 1px 玻璃高光：内容已经用 Margin 让位，这里贴住卡片最上沿，左右各留 1px。
-        var highlight = new Border
-        {
-            Height = 1,
-            Background = ThemeManager.Brush("BrushGlassHighlight", ThemeManager.Accent),
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            VerticalAlignment = VerticalAlignment.Top,
-            Margin = new Thickness(1, 0, 1, 0),
-            CornerRadius = new CornerRadius(1),
-            IsHitTestVisible = false
-        };
-
-        var host = new Grid();
-        host.Children.Add(grid);
-        host.Children.Add(highlight);
-        card.Child = host;
+        card.Child = grid;
 
         Motion.Hover(card);
         return card;

@@ -73,8 +73,7 @@ public sealed partial class DiscoverPage
         var query = SearchBox.Text.Trim();
         _query = query;
         _category = string.IsNullOrWhiteSpace(_category) ? "" : _category;
-        ShowBusy(query.Length > 0 ? "正在查找版本「" + query + "」…" : "正在读取版本列表…");
-        ShowSkeleton(query.Length > 0 ? "正在查找版本 " + query + " …" : "正在读取 Mojang 版本清单…");
+        ShowSkeleton(query.Length > 0 ? "正在查找版本「" + query + "」…" : "正在读取 Mojang 版本清单…");
         EmptyPanel.Visibility = Visibility.Collapsed;
         LoadMoreButton.Visibility = Visibility.Collapsed;
         CountText.Text = "读取中";
@@ -246,12 +245,10 @@ public sealed partial class DiscoverPage
     {
         var row = new Border
         {
-            CornerRadius = new CornerRadius(14),
+            // 走 GlassRow 样式：行自带液态玻璃底（BrushGlassFaint + BrushBorderSubtle 1px + 圆角 14），
+            // 会被背景层的透镜收集器接住。之前这里手写 fill/border 不是玻璃样式，所以整列版本行没有玻璃。
+            Style = (Style)Application.Current.Resources["GlassRow"],
             Padding = new Thickness(12, 10, 12, 10),
-            // 浅色下 0x10FFFFFF 的白几乎不可见，行会糊成一片；改用主题 fill/border token。
-            Background = Res("BrushFillSoft"),
-            BorderBrush = Res("BrushBorderSubtle"),
-            BorderThickness = new Thickness(1),
             Tag = "no-motion"
         };
 

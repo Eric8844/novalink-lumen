@@ -56,24 +56,9 @@ public sealed partial class DiscoverPage
 
         Unloaded += (_, _) => _storeCts?.Cancel();
 
-        ApplySegment(SegContent, !_storeMode);
-        ApplySegment(SegPlugins, _storeMode);
+        // 分段栏在页面构造时已 Enable，这里只补一次当前档位（首次进入内容栏，不播动画）。
+        SegmentedSwitch.Select(SegBar, _storeMode ? 1 : 0, animate: false);
         if (StoreSortCombo.SelectedIndex < 0) StoreSortCombo.SelectedIndex = 0;
-    }
-
-    /// <summary>分段按钮的选中态：选中时用导航选中的渐变与薄荷色，取消时清掉本地值回落到 GhostButton。</summary>
-    private static void ApplySegment(Button button, bool active)
-    {
-        if (active)
-        {
-            button.Background = (Brush)Application.Current.Resources["BrushNavSelected"];
-            button.Foreground = (Brush)Application.Current.Resources["BrushMint"];
-        }
-        else
-        {
-            button.ClearValue(Control.BackgroundProperty);
-            button.ClearValue(Control.ForegroundProperty);
-        }
     }
 
     private void SwitchStoreMode(bool store)
@@ -81,8 +66,8 @@ public sealed partial class DiscoverPage
         _storeMode = store;
         ModrinthPanel.Visibility = store ? Visibility.Collapsed : Visibility.Visible;
         PluginStorePanel.Visibility = store ? Visibility.Visible : Visibility.Collapsed;
-        ApplySegment(SegContent, !store);
-        ApplySegment(SegPlugins, store);
+        // 药丸指示器跟着档位滑过去，选中态的文字颜色/不透明度也由它统一处理。
+        SegmentedSwitch.Select(SegBar, store ? 1 : 0);
         // 分段切换给内容区一个 220ms 淡入，避免整块内容硬切造成的闪。
         FadeIn(store ? PluginStorePanel : ModrinthPanel);
     }
@@ -295,7 +280,7 @@ public sealed partial class DiscoverPage
     {
         // 浅色模式下 BrushCardTint 是 #F4FFFFFF，整张卡看起来就是一块白底平块；
         // 这里回到 GlassCard 样式自带的 BrushGlassCard 渐变 + BrushGlassRim 描边，
-        // 再叠一层顶部高光，才是液态玻璃。
+        // 内容外层再交给 GlassSurface 统一包一层容器。
         var card = new Border
         {
             Style = (Style)Application.Current.Resources["GlassCard"],

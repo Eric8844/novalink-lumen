@@ -70,11 +70,12 @@ public static class LaunchDialog
                     ProgressCenter.BindStop(taskId, LumenRuntime.Launch.Kill);
                     break;
                 case GamePhase.Exited:
-                    ProgressCenter.Finish(taskId, "游戏进程已退出");
+                    // 实例关闭后不再把「运行中/已完成」留在进度列表里，日志先写进 logs/progress 历史。
+                    ProgressCenter.Finish(taskId, "游戏进程已退出", remove: true);
                     exited.TrySetResult(true);
                     break;
                 case GamePhase.Crashed:
-                    ProgressCenter.Finish(taskId, state.Message, failed: true);
+                    ProgressCenter.Finish(taskId, state.Message, failed: true, remove: true);
                     exited.TrySetResult(true);
                     break;
             }

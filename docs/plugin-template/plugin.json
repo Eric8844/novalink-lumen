@@ -6,7 +6,7 @@
   "author": "你的名字",
   "description": "最小可运行的 NovaLink Lumen 插件模板：在主界面左侧导航栏注入一个页面。",
   "apiVersion": 1,
-  "minLauncher": "1.4.1",
+  "minLauncher": "1.5.1",
   "maxLauncher": "",
   "kind": "assembly",
   "entry": {

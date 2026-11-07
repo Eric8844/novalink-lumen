@@ -5,6 +5,9 @@ public static class AppLog
     private static readonly object Gate = new();
     private static string? _directory;
 
+    /// <summary>当前日志目录；进度历史日志等旁路日志写在它下面。</summary>
+    public static string? LogDirectory => _directory;
+
     public static void Initialize(string directory)
     {
         _directory = directory;

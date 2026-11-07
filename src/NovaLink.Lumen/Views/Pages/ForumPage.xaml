@@ -69,33 +69,29 @@
                                 </StackPanel>
                             </StackPanel>
                         </Border>
-                        <!-- 液态玻璃：顶部 1px 高光。 -->
-                        <Rectangle Height="1" Margin="1,0,1,0" VerticalAlignment="Top" HorizontalAlignment="Stretch"
-                                   Fill="{StaticResource BrushGlassHighlight}" RadiusX="1" RadiusY="1" IsHitTestVisible="False" />
                     </Grid>
                 </Border>
 
                 <Grid>
-                    <StackPanel Orientation="Horizontal" Spacing="4">
-                        <Button x:Name="TopicsTabButton" AutomationProperties.AutomationId="ForumTopicsTab" Click="TopicsTab_Click" Background="Transparent" BorderThickness="0" Padding="8,6">
-                            <StackPanel Spacing="5">
+                    <!-- 话题/动态分段栏：药丸指示器由 SegmentedSwitch 插入，切换时从左滑到右。 -->
+                    <Grid x:Name="ForumTabBar" HorizontalAlignment="Left" VerticalAlignment="Center">
+                        <Border Background="{StaticResource BrushFillSubtle}" BorderBrush="{StaticResource BrushBorderSubtle}"
+                                BorderThickness="1" CornerRadius="22" IsHitTestVisible="False" />
+                        <StackPanel x:Name="ForumTabRow" Orientation="Horizontal" Spacing="4" Padding="4">
+                            <Button x:Name="TopicsTabButton" AutomationProperties.AutomationId="ForumTopicsTab" Click="TopicsTab_Click" Padding="14,8">
                                 <StackPanel Orientation="Horizontal" Spacing="7">
                                     <FontIcon Glyph="&#xE8BD;" FontSize="13" />
                                     <TextBlock Text="话题" FontSize="13.5" FontWeight="SemiBold" />
                                 </StackPanel>
-                                <Border x:Name="TopicsTabLine" Height="2" CornerRadius="1" Background="{StaticResource BrushMint}" />
-                            </StackPanel>
-                        </Button>
-                        <Button x:Name="FeedTabButton" AutomationProperties.AutomationId="ForumFeedTab" Click="FeedTab_Click" Background="Transparent" BorderThickness="0" Padding="8,6">
-                            <StackPanel Spacing="5">
+                            </Button>
+                            <Button x:Name="FeedTabButton" AutomationProperties.AutomationId="ForumFeedTab" Click="FeedTab_Click" Padding="14,8">
                                 <StackPanel Orientation="Horizontal" Spacing="7">
                                     <FontIcon Glyph="&#xE7C3;" FontSize="13" />
                                     <TextBlock Text="动态" FontSize="13.5" FontWeight="SemiBold" />
                                 </StackPanel>
-                                <Border x:Name="FeedTabLine" Height="2" CornerRadius="1" Background="Transparent" />
-                            </StackPanel>
-                        </Button>
-                    </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </Grid>
                     <TextBlock x:Name="StatusText" HorizontalAlignment="Right" VerticalAlignment="Center" Style="{StaticResource TextSmall}" />
                 </Grid>
 
@@ -112,8 +108,6 @@
                                     <TextBlock Text="创建话题" VerticalAlignment="Center" />
                                 </StackPanel>
                             </Button>
-                            <Rectangle Height="1" Margin="1,0,1,0" VerticalAlignment="Top" HorizontalAlignment="Stretch"
-                                       Fill="{StaticResource BrushGlassHighlight}" RadiusX="1" RadiusY="1" IsHitTestVisible="False" />
                         </Grid>
                     </Border>
                     <StackPanel x:Name="TopicList" Spacing="10" />
@@ -157,8 +151,6 @@
                                 </Grid>
                                 <TextBlock x:Name="DetailBody" Style="{StaticResource TextBody}" TextWrapping="Wrap" LineHeight="24" />
                             </StackPanel>
-                            <Rectangle Height="1" Margin="1,0,1,0" VerticalAlignment="Top" HorizontalAlignment="Stretch"
-                                       Fill="{StaticResource BrushGlassHighlight}" RadiusX="1" RadiusY="1" IsHitTestVisible="False" />
                         </Grid>
                     </Border>
                     <StackPanel x:Name="ReplyList" Spacing="8" />
@@ -174,8 +166,6 @@
                                     </Button>
                                 </Grid>
                             </StackPanel>
-                            <Rectangle Height="1" Margin="1,0,1,0" VerticalAlignment="Top" HorizontalAlignment="Stretch"
-                                       Fill="{StaticResource BrushGlassHighlight}" RadiusX="1" RadiusY="1" IsHitTestVisible="False" />
                         </Grid>
                     </Border>
                 </StackPanel>

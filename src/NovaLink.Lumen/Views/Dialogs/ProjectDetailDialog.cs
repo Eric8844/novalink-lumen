@@ -367,11 +367,20 @@ public static class ProjectDetailDialog
 
             progress.Visibility = Visibility.Visible;
             progress.Value = 0;
+            // 下载也进进度中心：浮窗/进度显示里能看到同一条任务，结束后 .log 归到历史日志。
+            var taskId = "modrinth:" + project.ProjectId + ":" + currentFile.Filename;
+            ProgressCenter.Start(taskId, "安装 " + project.Title,
+                (instance.Loader ?? "内容") + " · " + (instance.Kernel ?? ""), "download", "准备中", "正在准备下载", false);
+            ProgressCenter.Log(taskId, currentFile.Filename + " → " + targetPath);
             var reporter = new Progress<DownloadProgress>(p =>
             {
                 progress.Value = Math.Clamp(p.Percent, 2, 96);
                 status.Text = p.Stage + " · " + p.Message
                     + (p.BytesPerSecond > 0 ? " · " + (p.BytesPerSecond / 1048576.0).ToString("0.0") + " MB/s" : "");
+                ProgressCenter.Update(taskId, p.Stage, Math.Clamp(p.Percent, 0, 100), p.Message,
+                    p.Received > 0 ? p.Received : null);
+                if (p.Received > 0)
+                    ProgressCenter.Log(taskId, p.Stage + " · " + p.Message + " · " + (p.Received / 1048576.0).ToString("0.0") + " MB");
             });
             try
             {
@@ -379,14 +388,17 @@ public static class ProjectDetailDialog
                 var path = await LumenRuntime.Modrinth.InstallToPathAsync(currentFile, targetPath, reporter);
                 status.Text = "已安装 " + Path.GetFileName(path) + " 到 " + folder;
                 progress.Value = 100;
+                ProgressCenter.Log(taskId, "主文件已写入 " + path);
                 modal.PrimaryText = "再次安装";
                 if (dependenciesToggle.IsOn)
-                    await InstallDependenciesAsync(instance, currentVersion, status, progress, folder);
+                    await InstallDependenciesAsync(instance, currentVersion, status, progress, folder, taskId);
+                ProgressCenter.Finish(taskId, "已安装到 " + folder + " · " + Path.GetFileName(path));
             }
             catch (Exception ex)
             {
                 AppLog.Error("modrinth", "安装项目失败", ex);
                 status.Text = "安装失败：" + ex.Message;
+                ProgressCenter.Finish(taskId, "安装失败：" + ex.Message, failed: true);
             }
         }
 
@@ -403,7 +415,7 @@ public static class ProjectDetailDialog
     }
 
     private static async Task InstallDependenciesAsync(InstanceSummary instance, ModrinthVersion version,
-        TextBlock status, ProgressBar progress, string? targetFolder)
+        TextBlock status, ProgressBar progress, string? targetFolder, string? taskId = null)
     {
         var requirements = version.Dependencies
             .Where(d => d.DependencyType == "required" && !string.IsNullOrWhiteSpace(d.ProjectId))
@@ -429,6 +441,12 @@ public static class ProjectDetailDialog
                 done++;
                 status.Text = "安装依赖 " + done + "/" + requirements.Count + " · " + project.Title;
                 progress.Value = Math.Min(98, 80 + done * 18.0 / Math.Max(1, requirements.Count));
+                if (taskId is not null)
+                {
+                    ProgressCenter.Update(taskId, "安装依赖", Math.Min(98, 80 + done * 18.0 / Math.Max(1, requirements.Count)),
+                        "依赖 " + done + "/" + requirements.Count + " · " + project.Title);
+                    ProgressCenter.Log(taskId, "依赖 " + done + "/" + requirements.Count + " · " + project.Title + " → " + folder);
+                }
                 await LumenRuntime.Modrinth.InstallFileAsync(project, candidate, file, folder);
             }
             catch (Exception ex)

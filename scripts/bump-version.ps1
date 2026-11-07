@@ -94,7 +94,7 @@ $sites = @(
 
     # --- 安装器：产品版本 / 显示版本 / 输出文件名 / 数据备份目录名 ---
     @{ Path = "installer/installer.nsi"; Pattern = '!define APP_VERSION "(?<v>\d+\.\d+\.\d+)"'; Mode = "to"; Check = "equal"; Note = "APP_VERSION" },
-    @{ Path = "installer/installer.nsi"; Pattern = '!define APP_VERSION_DISPLAY "(?<v>\d+\.\d+\.\d+) Preview"'; Mode = "to"; Check = "equal"; Note = "显示用版本号（发正式版要手动去掉 Preview）" },
+    @{ Path = "installer/installer.nsi"; Pattern = '!define APP_VERSION_DISPLAY "(?<v>\d+\.\d+\.\d+)(?: Preview)?"'; Mode = "to"; Check = "equal"; Note = "显示用版本号（测试版带 Preview，正式版没有）" },
     @{ Path = "installer/installer.nsi"; Pattern = 'VIProductVersion "(?<v>\d+\.\d+\.\d+)\.0"'; Mode = "to"; Check = "equal"; Note = "VIProductVersion" },
     @{ Path = "installer/installer.nsi"; Pattern = 'NovaLinkLumen-WinUI-Setup-(?<v>\d+\.\d+\.\d+)\.exe'; Mode = "to"; Check = "equal"; Note = "安装包输出文件名" },
     @{ Path = "installer/installer.nsi"; Pattern = 'Data_Backup_v(?<v>\d+\.\d+\.\d+)'; Mode = "from"; Check = "not-to"; Note = "升级前数据备份目录名（记的是上一版）" },

@@ -5,7 +5,7 @@
 ## 0. 你需要什么
 
 - .NET 10 SDK（`dotnet --list-sdks` 能看到 10.x）
-- NovaLink Lumen v1.4.1 及以上
+- NovaLink Lumen v1.5.1 及以上（液态玻璃组件与主题令牌是 v1.5.1 新增的，更早版本只能自己写画刷）
 - 本模板目录（`docs/plugin-template/`），把它整个复制到仓库外面再用，别直接改这里
 
 ## 1. 改三处名字
@@ -56,7 +56,54 @@ Expand-Archive "$env:TEMP\hello.world.zip" -DestinationPath $dir -Force
 - 开发时可以用 `--dev-mode` 启动启动器，能看到每个插件的校验结果与加载耗时
 - `--safe-mode` 可以一次性禁用所有插件（排查"是不是插件的问题"）
 
-## 5. 能力边界（v1.4.1）
+## 5. 液态玻璃与主题适配（v1.5.1）
+
+启动器的卡片、按钮都是同一套液态玻璃：半透明底 + 1px 描边 + 边缘折射 + 悬停高光。v1.5.1 把这套配方和主题色表开放给插件，**插件不用自己写任何颜色，也不用自己画高光**。
+
+三个入口全在 `context` 上：
+
+| API | 用途 |
+|---|---|
+| `context.Ui.CreateGlassCard(content, title)` | 让宿主造一张玻璃大卡片（标题行可选），返回 `object`，塞进 `ContentControl.Content` 即可 |
+| `context.Ui.CreateGlassPanel(content)` | 造一块更淡的玻璃面板，卡片内分组用 |
+| `context.Ui.CreateGlassButton(text, onClick)` | 造一个胶囊玻璃按钮；回调抛异常只记插件日志，不影响启动器 |
+| `context.Ui.ApplyGlassCard(element)` | 把玻璃配方套到**你自己 XAML 写的** Border/Grid/控件上（推荐给整页元素用） |
+| `context.Theme` | `IsLight` / `Name` / `Colors` / `Changed` 事件 |
+
+推荐写法（模板里的 `MainPage` 就是完整例子）：
+
+```csharp
+// XAML 里写了 <Border x:Name="HeroCard"> ... </Border>
+_ctx.Ui.ApplyGlassCard(HeroCard);                     // 原生元素套玻璃
+
+GlassCardHost.Content = _ctx.Ui.CreateGlassCard(     // 宿主造卡片
+    new TextBlock { Text = "内容由插件提供" }, "标题");
+
+GlassButtonHost.Content = _ctx.Ui.CreateGlassButton("点我", () => { /* ... */ });
+```
+
+主题色表的键（`context.Theme.Colors`，值是 `#AARRGGBB` 字符串）：
+
+| 键 | 用途 |
+|---|---|
+| `Accent` | 强调色（薄荷色，跟随用户主题） |
+| `Text` / `TextSecondary` / `TextTertiary` | 正文 / 次要 / 更弱的文字 |
+| `Surface` / `SurfaceRaised` | 页面底色 / 抬起的浮层底色 |
+| `GlassCard` / `GlassBorder` | 玻璃卡片底色 / 玻璃描边 |
+| `Field` / `FieldBorder` | 输入框底色 / 描边 |
+| `FillSubtle` | 浅填充（按钮、标签） |
+| `Danger` / `Warn` | 错误 / 警告 |
+
+**四条必须遵守的规则**：
+
+1. **别写死颜色**。用户切到浅色主题时，写死的 `#FFF3F7FE` 会直接看不见。要上色就取 `Theme.Colors`。
+2. **切主题时重刷 + 退订**。页面每次导航都是新实例：`Loaded` 里挂 `Theme.Changed`、`Unloaded` 里摘掉，事件里重新取色（模板 `MainPage.xaml.cs` 的 `OnLoaded`/`OnUnloaded`）。
+3. **玻璃工厂只能在 UI 线程调**（页面构造、`Loaded`、按钮事件）。后台线程调用会返回 `null` 并记一条日志。
+4. **不要自己在玻璃上再画一条 1px 顶部高光**。宿主的渲染层按样式识别卡片并自己画折射与高光，重叠会出现双描边。
+
+> 老版本兼容：这些 API 在 `IPluginUi`/`IPluginTheme` 上都有默认实现（返回 `null` / 固定深色色表），所以在 v1.5.0 上编译的插件在 v1.5.1 上照样能跑；反过来的只用新 API 的插件请在 `plugin.json` 里写 `"minLauncher": "1.5.1"`。
+
+## 6. 能力边界（v1.5.1）
 
 | 可以做 | 不可以做（v1.4.1） |
 |---|---|
@@ -65,8 +112,9 @@ Expand-Archive "$env:TEMP\hello.world.zip" -DestinationPath $dir -Force
 | 发 HTTP 请求（走宿主 HttpClient） | 带自己的原生 DLL 且与宿主同名（默认拒载） |
 | 订阅启动/关闭/启动游戏事件 | 修改宿主已有页面 |
 | 显示通知 | 常驻后台线程做重活（宿主会在关闭时等待） |
+| 用宿主玻璃组件与主题色表（v1.5.1） | 自己给玻璃卡片再叠高光/描边（会出现双描边） |
 
-## 6. 目录结构
+## 7. 目录结构
 
 ```
 docs/plugin-template/
@@ -81,7 +129,7 @@ docs/plugin-template/
 └── README.md
 ```
 
-## 7. 发布到插件商店
+## 8. 发布到插件商店
 
 启动器「发现 → 启动器插件」会扫描带 topic 的 GitHub 公开仓库，具体规则见 [../STORE.md](../STORE.md)。四步上架：
 

@@ -3,7 +3,7 @@ using NovaLink.Lumen.Core.Plugins;
 namespace NovaLink.Lumen.Services.Plugins;
 
 /// <summary>
-/// 交给插件的上下文实现：日志、设置、宿主能力，外加事件订阅登记。
+/// 交给插件的上下文实现：日志、设置、宿主能力、主题令牌，外加事件订阅登记。
 /// 事件分发点在这里做异常隔离 —— 插件事件处理器抛出的异常只记日志，绝不冒泡到宿主调用栈。
 /// </summary>
 public sealed class PluginContext : IPluginContext
@@ -11,13 +11,20 @@ public sealed class PluginContext : IPluginContext
     private readonly Dictionary<PluginEvent, List<Action<PluginEventArgs>>> _handlers = [];
     private readonly object _gate = new();
 
-    public PluginContext(string pluginId, IPluginLogger log, IPluginSettings settings, IPluginHost host, IPluginUi ui)
+    public PluginContext(
+        string pluginId,
+        IPluginLogger log,
+        IPluginSettings settings,
+        IPluginHost host,
+        IPluginUi ui,
+        IPluginTheme? theme = null)
     {
         PluginId = pluginId;
         Log = log;
         Settings = settings;
         Host = host;
         Ui = ui;
+        Theme = theme ?? NullPluginTheme.Instance;
     }
 
     public string PluginId { get; }
@@ -29,6 +36,9 @@ public sealed class PluginContext : IPluginContext
     public IPluginHost Host { get; }
 
     public IPluginUi Ui { get; }
+
+    /// <summary>当前主题令牌（颜色 + 深浅 + 变更事件）。未注入时是固定深色的空实现。</summary>
+    public IPluginTheme Theme { get; }
 
     /// <summary>登记一个事件处理器；Dispose 返回值即退订。</summary>
     public IDisposable Subscribe(PluginEvent pluginEvent, Action<PluginEventArgs> handler)

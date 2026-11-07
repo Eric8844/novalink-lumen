@@ -42,6 +42,7 @@ public sealed partial class ShellPage : Page
     private readonly BackgroundMusicService _music;
     private bool _musicProgressSyncing;
     private bool _musicVolumeSyncing;
+    private long _lastMusicPersist;
     private bool _musicVolumeDirty;
     private bool _musicUiReady;
     private MediaPlayer? _backgroundVideoPlayer;
@@ -63,6 +64,7 @@ public sealed partial class ShellPage : Page
         _music = new BackgroundMusicService(DispatcherQueue);
         _music.Changed += (_, _) => UpdateMusicDock();
         ContentFrame.Navigated += ContentFrame_Navigated;
+
         AddHandler(UIElement.PointerMovedEvent, new PointerEventHandler(Shell_PointerMoved), true);
         AddHandler(UIElement.PointerExitedEvent, new PointerEventHandler(Shell_PointerExited), true);
         Loaded += OnLoaded;
@@ -86,6 +88,9 @@ public sealed partial class ShellPage : Page
             _music.Dispose();
         };
         SizeChanged += (_, _) => { UpdateTopBar(); LayoutCustomBackground(); };
+        // 左侧导航的选中底色不是「按钮自己变蓝」，而是底下一枚胶囊滑过去（竖直方向）。
+        LiquidSlide.Enable(NavRailGrid, vertical: true,
+            fill: () => (Brush)Application.Current.Resources["BrushNavSelected"], fixedRadius: 16);
         foreach (var button in NavButtons) AttachNavButton(button);
         Motion.RotateOnHover(BrandLogo, 4f, 1.04f);
 
@@ -253,6 +258,7 @@ public sealed partial class ShellPage : Page
         BackdropTint.Fill = Solid(light ? Color.FromArgb(0x0C, 0xFF, 0xFF, 0xFF) : Color.FromArgb(0x18, 0x04, 0x0A, 0x12));
         NavRail.Background = Solid(light ? Color.FromArgb(0xC4, 0xF5, 0xF8, 0xFC) : Color.FromArgb(0x38, 0x06, 0x0B, 0x13));
         NavRail.BorderBrush = Solid(light ? Color.FromArgb(0x16, 0x00, 0x00, 0x00) : Color.FromArgb(0x12, 0xFF, 0xFF, 0xFF));
+        LiquidSlide.Refresh(NavRailGrid);
         VersionChip.Background = Solid(light ? Color.FromArgb(0xC4, 0xFF, 0xFF, 0xFF) : Color.FromArgb(0x12, 0xFF, 0xFF, 0xFF));
         VersionChip.BorderBrush = Solid(light ? Color.FromArgb(0x1C, 0x00, 0x00, 0x00) : Color.FromArgb(0x1F, 0xFF, 0xFF, 0xFF));
         if (!SearchBox.FocusState.Equals(FocusState.Unfocused))
@@ -335,9 +341,31 @@ public sealed partial class ShellPage : Page
     {
         var point = e.GetCurrentPoint(Aurora).Position;
         Aurora.SetPointer(point.X, point.Y);
+
+        // 按压/悬停缩放兜底：页面里运行时新建的按钮（列表行、卡片按钮）不一定走过
+        // AttachButtons 的视觉树遍历，这里在指针扫过时补挂一次（幂等，不会重复订阅）。
+        EnsureButtonMotion(e.OriginalSource as DependencyObject);
     }
 
-    private void Shell_PointerExited(object sender, PointerRoutedEventArgs e) => Aurora.ClearPointer();
+    /// <summary>沿视觉树向上找最近的按钮并挂上统一的缩放动效（已挂过会直接忽略）。</summary>
+    private static void EnsureButtonMotion(DependencyObject? source)
+    {
+        for (var depth = 0; source is not null && depth < 16; depth++)
+        {
+            if (source is ButtonBase button)
+            {
+                Motion.AttachButtonScale(button);
+                return;
+            }
+
+            source = VisualTreeHelper.GetParent(source);
+        }
+    }
+
+    private void Shell_PointerExited(object sender, PointerRoutedEventArgs e)
+    {
+        Aurora.ClearPointer();
+    }
 
     private void SearchBox_GotFocus(object sender, RoutedEventArgs e)
     {
@@ -363,7 +391,6 @@ public sealed partial class ShellPage : Page
         Navigate("home");
         Motion.Pulse(StatusDot, 0.55, 1, 2800);
         ApplyGameState(LumenRuntime.Launch.State);
-        _ = RefreshJavaAsync();
         UpdateTopBar();
         ApplyBackground();
         ConfigureMusic();
@@ -508,17 +535,59 @@ public sealed partial class ShellPage : Page
     {
         var s = LumenRuntime.Settings.Settings;
         _music.Configure(s.MusicTracks, s.MusicMode, s.MusicVolume);
-        if (autoplay && s.MusicAutoplay && _music.HasTracks)
+        if (_music.HasTracks)
         {
-            _music.PlayIndex(0);
+            var restore = s.MusicRememberPosition && s.MusicLastIndex >= 0 && s.MusicLastIndex < _music.TrackCount;
+            var index = restore ? s.MusicLastIndex : 0;
+            var startAt = restore ? TimeSpan.FromSeconds(Math.Max(0, s.MusicLastPositionSeconds)) : TimeSpan.Zero;
+            // 上次退出时是暂停/停着的，这次就停在原位等着，不要一启动就响起来。
+            var play = autoplay && s.MusicAutoplay && (!restore || s.MusicLastWasPlaying);
+            AppLog.Info("music", "恢复上次播放：曲目 " + index + "，位置 " + (int)startAt.TotalSeconds + " 秒，自动播放 " + play);
+            _music.PlayIndex(index, play, startAt);
         }
         UpdateMusicDock();
+    }
+
+    /// <summary>把当前曲目、进度与「是否在播」写回设置，下次启动接着上次听。</summary>
+    /// <param name="playingOverride">
+    /// 刚点过播放/暂停时用「意图」覆盖 MediaPlayer 的状态：它的 PlaybackState 要过几十毫秒才变，
+    /// 立刻读会读到旧值（表现为「明明点了暂停，重启后却又自己响起来」）。
+    /// </param>
+    public void PersistMusicState(bool? playingOverride = null, bool quiet = false)
+    {
+        try
+        {
+            var settings = LumenRuntime.Settings.Settings;
+            if (!settings.MusicRememberPosition) return;
+            var index = _music.TrackIndex;
+            settings.MusicLastIndex = index;
+            settings.MusicLastPositionSeconds = index < 0 ? 0 : Math.Max(0, _music.Position.TotalSeconds);
+            settings.MusicLastWasPlaying = index >= 0 && (playingOverride ?? _music.IsPlaying);
+            // 只写盘、不广播：这条路径每次点播放/暂停都会走一遍，广播会让首页和论坛页整个重载。
+            LumenRuntime.Settings.Save(notify: false);
+            // 定时保存（每 10 秒一次）不写日志，避免刷屏；只有用户手动操作与退出时留一条。
+            if (!quiet) AppLog.Info("music", "保存播放状态：曲目 " + index + "，位置 " + (int)settings.MusicLastPositionSeconds + " 秒，播放中 " + settings.MusicLastWasPlaying);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("music", "保存播放进度失败：" + ex.Message);
+        }
+    }
+
+    /// <summary>定时保存进度（每 10 秒最多一次），避免崩溃/断电后只能从头开始。</summary>
+    private void PersistMusicStateThrottled()
+    {
+        var now = Environment.TickCount64;
+        if (now - _lastMusicPersist < 10000) return;
+        _lastMusicPersist = now;
+        PersistMusicState(quiet: true);
     }
 
     private void UpdateMusicDock()
     {
         var has = _music.HasTracks;
         MusicDock.Visibility = has ? Visibility.Visible : Visibility.Collapsed;
+        Aurora.SetMusicPlaying(has && _music.IsPlaying);
         if (!has)
         {
             // 曲目被清空时顺手把悬停详情收回去，避免下次显示时停在展开态。
@@ -538,15 +607,30 @@ public sealed partial class ShellPage : Page
         RefreshMusicProgress();
     }
 
-    private void MusicToggle_Click(object sender, RoutedEventArgs e) => _music.Toggle();
-    private void MusicNext_Click(object sender, RoutedEventArgs e) => _music.Next();
-    private void MusicPrevious_Click(object sender, RoutedEventArgs e) => _music.Previous();
+    private void MusicToggle_Click(object sender, RoutedEventArgs e)
+    {
+        var wasPlaying = _music.IsPlaying;
+        _music.Toggle();
+        PersistMusicState(!wasPlaying);
+    }
+
+    private void MusicNext_Click(object sender, RoutedEventArgs e)
+    {
+        _music.Next();
+        PersistMusicState();
+    }
+
+    private void MusicPrevious_Click(object sender, RoutedEventArgs e)
+    {
+        _music.Previous();
+        PersistMusicState();
+    }
 
     private void MusicMode_Click(object sender, RoutedEventArgs e)
     {
         var mode = _music.CycleMode();
         LumenRuntime.Settings.Settings.MusicMode = mode;
-        LumenRuntime.Settings.Save();
+        LumenRuntime.Settings.Save(notify: false);
         UpdateMusicDock();
     }
 
@@ -776,6 +860,7 @@ public sealed partial class ShellPage : Page
         finally { _musicProgressSyncing = false; }
         MusicTimeText.Text = FormatMusicTime(position) + " / " + FormatMusicTime(duration);
         MusicMetaText.Text = BuildMusicMeta();
+        PersistMusicStateThrottled();
     }
 
     /// <summary>拖动进度条：按当前曲目总时长换算成秒并跳转，播放状态保持不变。</summary>
@@ -791,6 +876,7 @@ public sealed partial class ShellPage : Page
         var target = TimeSpan.FromSeconds(Math.Clamp(e.NewValue, 0, 1) * duration.TotalSeconds);
         _music.Seek(target);
         MusicTimeText.Text = FormatMusicTime(target) + " / " + FormatMusicTime(duration);
+        PersistMusicStateThrottled();
     }
 
     /// <summary>拖动音量：立刻作用于播放器；真正落盘等悬停收起时一次写完，避免拖动过程频繁写盘。</summary>
@@ -812,7 +898,7 @@ public sealed partial class ShellPage : Page
         {
             var settings = LumenRuntime.Settings.Settings;
             settings.MusicVolume = Math.Round(Math.Clamp(_music.Volume, 0, 1), 2);
-            LumenRuntime.Settings.Save();
+            LumenRuntime.Settings.Save(notify: false);
         }
         catch (Exception ex)
         {
@@ -838,25 +924,11 @@ public sealed partial class ShellPage : Page
     private void UpdateTopBar()
     {
         // 顶栏改成两列后这里只管「搜索框最多多宽」：窄窗口或游戏运行时压窄搜索框，
-        // 并把右侧不关键的 Java 胶囊 / Ctrl K 提示让出来，保证状态条永远不和搜索框重叠。
+        // 并把右侧不关键的 Ctrl K 提示让出来，保证状态条永远不和搜索框重叠。
         var gameActive = GameStatusChip.Visibility == Visibility.Visible;
         var compact = ActualWidth < 1180 || gameActive;
         SearchShell.MaxWidth = compact ? 286 : 372;
-        JavaChip.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
         SearchShortcut.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
-    }
-
-    public async Task RefreshJavaAsync()
-    {
-        try
-        {
-            var best = await LumenRuntime.Java.BestAsync();
-            JavaChipText.Text = best is null ? "Java 自动" : "Java " + best.Major;
-        }
-        catch
-        {
-            JavaChipText.Text = "Java 自动";
-        }
     }
 
     private void RefreshAccount()
@@ -1088,19 +1160,24 @@ public sealed partial class ShellPage : Page
 
     private void UpdateNav()
     {
+        Button? current = null;
         foreach (var button in NavButtons)
         {
             var on = (button.Tag as string) == _active;
-            button.Background = on
-                ? (Brush)Application.Current.Resources["BrushNavSelected"]
-                : new SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0));
-            button.BorderBrush = on ? (Brush)Application.Current.Resources["BrushNavSelectedBorder"] : null;
-            button.BorderThickness = on ? new Thickness(1) : new Thickness(0);
+            // 选中底色由 NavRailGrid 里的胶囊负责，按钮自己保持透明（否则会盖住胶囊）。
+            button.Background = TransparentBrush;
+            button.BorderBrush = null;
+            button.BorderThickness = new Thickness(0);
             var foreground = (Brush)Application.Current.Resources[on ? "BrushMint" : "BrushTextSecondary"];
             button.Foreground = foreground;
             ApplyNavIconBrush(button, foreground);
+            if (on) current = button;
         }
+
+        LiquidSlide.Select(NavRailGrid, current);
     }
+
+    private static readonly SolidColorBrush TransparentBrush = new(Microsoft.UI.Colors.Transparent);
 
     private async void Account_Click(object sender, RoutedEventArgs e)
     {
@@ -1158,6 +1235,13 @@ public sealed partial class ShellPage : Page
             if (account is not null) RefreshAccount();
         };
         flyout.Items.Add(nl);
+        var ls = new MenuFlyoutItem { Text = "LittleSkin 登录", Icon = new FontIcon { Glyph = "" } };
+        ls.Click += async (_, _) =>
+        {
+            var account = await Views.Dialogs.LittleSkinLoginDialog.ShowAsync(XamlRoot);
+            if (account is not null) RefreshAccount();
+        };
+        flyout.Items.Add(ls);
         var selected = LumenRuntime.Accounts.Selected;
         if (selected is { Type: "novalink", Microsoft: not null })
         {
@@ -1402,17 +1486,15 @@ public sealed partial class ShellPage : Page
     private void RefreshProgressDock()
     {
         var tasks = ProgressCenter.Snapshot();
-        var task = tasks.FirstOrDefault(t => t.Status is ProgressStatus.Active or ProgressStatus.Stopping)
-                   ?? tasks.FirstOrDefault();
-        if (task is null)
+        var active = tasks.Where(t => t.Status is ProgressStatus.Active or ProgressStatus.Stopping).ToList();
+        var aggregate = ProgressCenter.Aggregate();
+        var last = tasks.FirstOrDefault();
+
+        if (aggregate.Count == 0)
         {
-            ProgressDock.Visibility = Visibility.Collapsed;
-            return;
-        }
-        if (task.Status is not (ProgressStatus.Active or ProgressStatus.Stopping))
-        {
-            var age = DateTimeOffset.Now - (task.FinishedAt ?? DateTimeOffset.Now);
-            if (age.TotalSeconds > 1.5)
+            // 刚结束的任务在小窗里多留 1.5 秒，让用户看到「完成」而不是瞬间消失。
+            if (last is null || last.FinishedAt is null ||
+                (DateTimeOffset.Now - last.FinishedAt.Value).TotalSeconds > 1.5)
             {
                 ProgressDock.Visibility = Visibility.Collapsed;
                 return;
@@ -1425,17 +1507,32 @@ public sealed partial class ShellPage : Page
                 _dockTimer.Tick += (_, _) => { _dockTimer = null; RefreshProgressDock(); };
                 _dockTimer.Start();
             }
+            ProgressDock.Visibility = Visibility.Visible;
+            ProgressDockTitle.Text = last.Title;
+            ProgressDockIcon.Glyph = last.Kind == "launch" ? "\uE768" : "\uE896";
+            ProgressDockPercent.Text = last.Indeterminate ? "···" : last.PercentValue + "%";
+            ProgressDockBar.IsIndeterminate = last.Indeterminate;
+            ProgressDockBar.Value = last.Indeterminate ? 0 : last.PercentValue;
+            ProgressDockStatus.Text = last.StatusText;
+            ProgressDockMessage.Text = last.Message;
+            ProgressDockMore.Visibility = Visibility.Collapsed;
+            return;
         }
 
+        // 进行中的任务一律合成一条总进度，不再只显示排在最前面的那个任务。
         ProgressDock.Visibility = Visibility.Visible;
-        ProgressDockTitle.Text = task.Title;
-        ProgressDockIcon.Glyph = task.Kind == "launch" ? "\uE768" : "\uE896";
-        ProgressDockPercent.Text = task.Indeterminate ? "···" : task.PercentValue + "%";
-        ProgressDockBar.IsIndeterminate = task.Indeterminate;
-        ProgressDockBar.Value = task.Indeterminate ? 0 : task.PercentValue;
-        ProgressDockStatus.Text = task.StatusText + (string.IsNullOrEmpty(task.SpeedText) ? "" : " · " + task.SpeedText);
-        ProgressDockMessage.Text = task.Message;
-        var more = Math.Max(0, tasks.Count(t => t.Status is ProgressStatus.Active or ProgressStatus.Stopping) - 1);
+        ProgressDockTitle.Text = aggregate.Count > 1 ? "总进度 · " + aggregate.Count + " 个任务" : "总进度";
+        ProgressDockIcon.Glyph = active.Any(t => t.Kind == "launch") ? "\uE768" : "\uE896";
+        ProgressDockPercent.Text = aggregate.Indeterminate ? "···" : Math.Round(aggregate.Percent) + "%";
+        ProgressDockBar.IsIndeterminate = aggregate.Indeterminate;
+        ProgressDockBar.Value = aggregate.Indeterminate ? 0 : aggregate.Percent;
+        var status = aggregate.Indeterminate ? "处理中" : aggregate.Total > 0 ? "下载中" : "进行中";
+        if (aggregate.Speed > 0) status += " · " + ProgressTask.FormatBytes((long)aggregate.Speed) + "/s";
+        if (aggregate.Total > 0)
+            status += " · " + ProgressTask.FormatBytes(aggregate.Bytes) + " / " + ProgressTask.FormatBytes(aggregate.Total);
+        ProgressDockStatus.Text = status;
+        ProgressDockMessage.Text = active.FirstOrDefault()?.Message ?? "";
+        var more = Math.Max(0, aggregate.Count - 1);
         ProgressDockMore.Visibility = more > 0 ? Visibility.Visible : Visibility.Collapsed;
         ProgressDockMoreText.Text = "+" + more;
     }
